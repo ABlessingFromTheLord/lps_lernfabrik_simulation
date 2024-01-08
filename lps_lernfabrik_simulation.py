@@ -3,16 +3,21 @@ import simpy as sp
 # global variables
 PARTS_MADE = 0
 # dummy values
+KAPUTT_WSK = 10
 SAEGEN_ZEIT = 10
 DREH_ZEIT = 10
 SENK_ZEIT = 10
 ASSEMBLE_ZEIT = 10
-KAPUTT_ZEIT = 10
+KAPUTT_MACHINE_A = 10
+KAPUTT_MACHINE_B = 10
+KAPUTT_MACHINE_C = 10
+KAPUTT_MACHINE_D = 10
 REPAIR_ZEIT = 10
-PROZESS_ZEIT = 0
+PROZESS_ZEIT = 10
+MTTR = 10
 
 
-
+# the factory implementation
 class Lernfabrik:
     def __init__(self, env):
         self.env = env
@@ -89,4 +94,8 @@ class Lernfabrik:
                 self.kaputt = False
 
         # was sollte zurückgegeben werden?
+
+    # ruestung funktion kommt
+
+
 
