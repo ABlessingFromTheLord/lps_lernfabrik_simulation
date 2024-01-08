@@ -19,12 +19,15 @@ MTTR = 10
 
 # the factory implementation
 class Lernfabrik:
+    # this class simulates all processes taking place in the factory
     def __init__(self, env):
         self.env = env
         self.kaputt = False
 
 
+    # processes
     def saegen(self):
+        # this methods simulates the "saegen" operation
         while True:
             PROZESS_ZEIT = SAEGEN_ZEIT
             start = self.env.now
@@ -43,6 +46,7 @@ class Lernfabrik:
 
 
     def drehen(self):
+        # this methods simulates the "drehen" operation
         while True:
             PROZESS_ZEIT = DREH_ZEIT
             start = self.env.now
@@ -61,6 +65,7 @@ class Lernfabrik:
 
 
     def senken(self):
+        # this methods simulates the "senken" operation
         while True:
             PROZESS_ZEIT = SENK_ZEIT
             start = self.env.now
@@ -79,6 +84,7 @@ class Lernfabrik:
 
 
     def assemble(self):
+        # this methods simulates the assemble operation
         while True:
             PROZESS_ZEIT = ASSEMBLE_ZEIT
             start = self.env.now
@@ -95,7 +101,12 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
-    # ruestung funktion kommt
+
+    # Helper functions
+    # ruestung function; takes in previous process and
+    # returns the time needed till machines are equipped
+
+
 
 
 
