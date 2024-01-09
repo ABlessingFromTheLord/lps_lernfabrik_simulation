@@ -1,7 +1,9 @@
+import simpy
 import simpy as sp
 
 # global variables
 PARTS_MADE = 0
+
 # dummy values
 KAPUTT_WSK = 10
 SAEGEN_ZEIT = 10
@@ -16,6 +18,16 @@ REPAIR_ZEIT = 10
 PROZESS_ZEIT = 10
 MTTR = 10
 
+# simpy environment decleration
+env = simpy.Environment()
+
+# machines as simpy resources
+machine_jaespa = simpy.Resource(env)
+machine_gz200_1 = simpy.Resource(env)
+machine_gz200_2 = simpy.Resource(env)
+machine_fz12 = simpy.Resource(env)
+machine_arbeitsplatz_2 = simpy.Resource(env)
+
 
 # the factory implementation
 class Lernfabrik:
@@ -23,7 +35,6 @@ class Lernfabrik:
     def __init__(self, env):
         self.env = env
         self.kaputt = False
-
 
     # processes
     def saegen(self):
@@ -44,7 +55,6 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
-
     def drehen(self):
         # this methods simulates the "drehen" operation
         while True:
@@ -62,7 +72,6 @@ class Lernfabrik:
                 self.kaputt = False
 
         # was sollte zurückgegeben werden?
-
 
     def senken(self):
         # this methods simulates the "senken" operation
@@ -82,7 +91,6 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
-
     def assemble(self):
         # this methods simulates the assemble operation
         while True:
@@ -101,12 +109,22 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
-
     # Helper functions
-    # ruestung function; takes in previous process and
+    def select_machines(self, machines):
+        # receives an array of the machines in the factory
+        # returns true if the required resources are free
+        required_machines = []
+
+        for machine in machines:
+            if not machine.working:
+                required_machines.append(machine)
+
+        # TODO: check if the required machines are same as the machines available
+
+
+    # TODo: ruestung function; takes in previous process and
     # returns the time needed till machines are equipped
 
 
-
-
-
+# running simulation
+env.run()
