@@ -1,5 +1,15 @@
 import simpy
 
+# simpy environment declaration
+env = simpy.Environment()
+
+# instantiate machines as simpy resources
+machine_jaespa = simpy.Resource(env)  # Maschine zum Säegen
+machine_gz200 = simpy.Resource(env)  # Machine zum Drehen
+machine_fz12 = simpy.Resource(env)  # Machine zum Fräsen
+machine_arbeitsplatz = simpy.Resource(env)  # Machine zum Montage
+machine_arbeitsplatz_2 = simpy.Resource(env)  # Machine zum Montage
+
 # global variables
 PARTS_MADE = 0
 
@@ -18,11 +28,15 @@ GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
 REPAIR_ZEIT = 10
 MTTR = 10
+OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
+UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
+HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
+RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz]
 # ACTUAL PRODUCED PARTS
-OBERTEIL = 0
-UNTERTEIL = 0
-HALTETEIL = 0
-RING = 0
+OBERTEIL_COUNT = 0
+UNTERTEIL_COUNT = 0
+HALTETEIL_COUNT = 0
+RING_COUNT = 0
 # ORDERS
 ORDERS = []
 
@@ -41,7 +55,7 @@ def get_operation_time(machine):
 
 
 # the factory implementation
-def select_machines(machines):
+def machines_available(machines):
     # receives an array of the machines in the factory
     # returns true if the required resources are free
     required_machines = []
@@ -68,6 +82,8 @@ class Lernfabrik:
         #  simulates an operation, it is an abstract function
         #  to know the exact operation executing, look at the time used
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
+
+
         while True:
             prozess_zeit = get_operation_time(machine)
             start = self.env.now
@@ -83,6 +99,7 @@ class Lernfabrik:
                 yield self.env.timeout(60)  # repair time
                 # TODO: change factor to 60 in simulation time, and above to 1
                 self.kaputt = False
+
 
     # Helper functions
     # TODo: ruestung function; takes in previous process and
@@ -142,21 +159,17 @@ class Lernfabrik:
         elif machine == machine_fz12:
             return (1 - FZ12_MZ) * self.time_run
 
+    def part_creation(self, part_name):
+        #  runs consequent operations to create a Unilokk part
+        # TODO: implement this function
+        global OBERTEIL_COUNT
+        OBERTEIL_COUNT = OBERTEIL_COUNT + 1
 
-# simpy environment declaration
-env = simpy.Environment()
 
-# instantiate machines as simpy resources
-machine_jaespa = simpy.Resource(env)  # Maschine zum Säegen
-machine_gz200 = simpy.Resource(env)  # Machine zum Drehen
-machine_fz12 = simpy.Resource(env)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.Resource(env)  # Machine zum Montage
-machine_arbeitsplatz_2 = simpy.Resource(env)  # Machine zum Montage
 
 # instantiate object of Lernfabrik class
 # test ruestung_zeit
 fabric = Lernfabrik(env, (7 * 86400))
-
 
 # running simulation
 env.run()
