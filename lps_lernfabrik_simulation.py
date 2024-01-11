@@ -1,5 +1,4 @@
 import simpy
-import simpy as sp
 
 # global variables
 PARTS_MADE = 0
@@ -26,7 +25,8 @@ OBERTEIL = 0
 UNTERTEIL = 0
 HALTETEIL = 0
 RING = 0
-
+# ORDERS
+ORDERS = []
 
 # the factory implementation
 class Lernfabrik:
@@ -46,15 +46,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def drehen(self):
         #  simulates the "drehen" operation
@@ -64,15 +62,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def fraesen(self):
         #  simulates the "fraesen" operation
@@ -82,15 +78,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def senken(self):
         #  simulates the "senken" operation
@@ -100,15 +94,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def kleben(self):
         #  simulates the "kleben" operation
@@ -118,15 +110,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def montage(self):
         # simulates the "assemble" operation
@@ -136,15 +126,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def pruefen(self):
         # simulates the "assemble" operation
@@ -154,15 +142,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     def verpacken(self):
         # simulates the "assemble" operation
@@ -172,15 +158,13 @@ class Lernfabrik:
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
 
-            except sp.Interrupt:
+            except simpy.Interrupt:
                 self.kaputt = True
                 PROZESS_ZEIT -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
-
-        # was sollte zurückgegeben werden?
 
     # Helper functions
     def select_machines(self, machines):
@@ -241,6 +225,12 @@ class Lernfabrik:
 
         elif machine == machine_jaespa:
             return 0
+
+
+# simulates the fulfillment of orders
+def fulfill_orders(orders):
+    for order in orders:
+        return 0 # dummy to resolve the error
 
 
 # simpy environment decleration
