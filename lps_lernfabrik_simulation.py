@@ -15,9 +15,8 @@ PRUEFEN_ZEIT = 10  # IN MINUTES
 VERPACKEN_ZEIT = 10  # IN MINUTES
 JAESPA_MZ = 0.98
 GZ_200_MZ = 0.85
-FZ12_MZ = 0 # TODO: get value
+FZ12_MZ = 0  # TODO: get value
 REPAIR_ZEIT = 10
-PROZESS_ZEIT = 10
 MTTR = 10
 # ACTUAL PRODUCED PARTS
 OBERTEIL = 0
@@ -57,8 +56,8 @@ def select_machines(machines):
 
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
-    def __init__(self, env, time_run):
-        self.env = env  # environment variable
+    def __init__(self, sim_env, time_run):
+        self.env = sim_env  # environment variable
         self.kaputt = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
         self.previously_created = ""  # string to denote the previously created part
         self.next_created = ""  # string to denote the next created part
@@ -70,147 +69,19 @@ class Lernfabrik:
         #  to know the exact operation executing, look at the time used
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
         while True:
-            PROZESS_ZEIT = SAEGEN_ZEIT
+            prozess_zeit = get_operation_time(machine)
             start = self.env.now
             try:
-                yield self.env.timeout(get_operation_time(machine))
+                yield self.env.timeout(prozess_zeit)
 
             except simpy.Interrupt:
                 self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
+                prozess_zeit -= (self.env.now - start)
 
                 # repairing
                 yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
                 yield self.env.timeout(60)  # repair time
                 # TODO: change factor to 60 in simulation time, and above to 1
-                self.kaputt = False
-
-    def saegen(self):
-        #  simulates the "saegen" operation
-        while True:
-            PROZESS_ZEIT = SAEGEN_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def drehen(self):
-        #  simulates the "drehen" operation
-        while True:
-            PROZESS_ZEIT = DREH_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def fraesen(self):
-        #  simulates the "fraesen" operation
-        while True:
-            PROZESS_ZEIT = FRAESEN_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def senken(self):
-        #  simulates the "senken" operation
-        while True:
-            PROZESS_ZEIT = SENK_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def kleben(self):
-        #  simulates the "kleben" operation
-        while True:
-            PROZESS_ZEIT = KLEBEN_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def montage(self):
-        # simulates the "assemble" operation
-        while True:
-            PROZESS_ZEIT = MONTAGE_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def pruefen(self):
-        # simulates the "assemble" operation
-        while True:
-            PROZESS_ZEIT = PRUEFEN_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
-                self.kaputt = False
-
-    def verpacken(self):
-        # simulates the "assemble" operation
-        while True:
-            PROZESS_ZEIT = VERPACKEN_ZEIT
-            start = self.env.now
-            try:
-                yield self.env.timeout(PROZESS_ZEIT)
-
-            except simpy.Interrupt:
-                self.kaputt = True
-                PROZESS_ZEIT -= (self.env.now - start)
-
-                # repairing
-                yield self.env.timeout(REPAIR_ZEIT)
                 self.kaputt = False
 
     # Helper functions
@@ -272,13 +143,7 @@ class Lernfabrik:
             return (1 - FZ12_MZ) * self.time_run
 
 
-# simulates the fulfillment of orders
-def fulfill_orders(orders):
-    for order in orders:
-        return 0 # dummy to resolve the error
-
-
-# simpy environment decleration
+# simpy environment declaration
 env = simpy.Environment()
 
 # instantiate machines as simpy resources
@@ -288,17 +153,10 @@ machine_fz12 = simpy.Resource(env)  # Machine zum Fräsen
 machine_arbeitsplatz = simpy.Resource(env)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.Resource(env)  # Machine zum Montage
 
-# Instantiate LPS Lernfabrik
-fabric = Lernfabrik(env)
-
 # instantiate object of Lernfabrik class
 # test ruestung_zeit
-fabric = Lernfabrik(env)
-fabric.previously_created = "Unterteil"
-fabric.next_created = "Halteteil"
+fabric = Lernfabrik(env, (7 * 86400))
 
-print(fabric.ruestung_zeit(machine_fz12))
-# end of test ruestung_zeit
 
 # running simulation
 env.run()
