@@ -4,11 +4,11 @@ import simpy
 env = simpy.Environment()
 
 # instantiate machines as simpy resources
-machine_jaespa = simpy.Resource(env)  # Maschine zum Säegen
-machine_gz200 = simpy.Resource(env)  # Machine zum Drehen
-machine_fz12 = simpy.Resource(env)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.Resource(env)  # Machine zum Montage
-machine_arbeitsplatz_2 = simpy.Resource(env)  # Machine zum Montage
+machine_jaespa = simpy.Resource(env, capacity=1)  # Maschine zum Säegen
+machine_gz200 = simpy.Resource(env, capacity=1)  # Machine zum Drehen
+machine_fz12 = simpy.Resource(env, capacity=1)  # Machine zum Fräsen
+machine_arbeitsplatz = simpy.Resource(env, capacity=1)  # Machine zum Montage
+machine_arbeitsplatz_2 = simpy.Resource(env, capacity=1)  # Machine zum Montage
 
 # global variables
 PARTS_MADE = 0
@@ -68,6 +68,17 @@ def machines_available(machines):
     # TODO:: reformat into taking the shared resources
 
 
+def get_machines_for_part(part_name):
+    #  returns the machines required to create a certain part of Unilokk
+    match part_name:
+        case "Oberteil":
+            return OBERTEIL_MACHINES
+        case "Unterteil":
+            return UNTERTEIL_MACHINES
+        case "Halteteil":
+            return HALTETEIL_MACHINES
+
+
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env, time_run):
@@ -82,7 +93,6 @@ class Lernfabrik:
         #  simulates an operation, it is an abstract function
         #  to know the exact operation executing, look at the time used
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
-
 
         while True:
             prozess_zeit = get_operation_time(machine)
@@ -99,7 +109,6 @@ class Lernfabrik:
                 yield self.env.timeout(60)  # repair time
                 # TODO: change factor to 60 in simulation time, and above to 1
                 self.kaputt = False
-
 
     # Helper functions
     # TODo: ruestung function; takes in previous process and
@@ -162,9 +171,9 @@ class Lernfabrik:
     def part_creation(self, part_name):
         #  runs consequent operations to create a Unilokk part
         # TODO: implement this function
-        global OBERTEIL_COUNT
-        OBERTEIL_COUNT = OBERTEIL_COUNT + 1
-
+        if part_name == "Oberteil":
+            global OBERTEIL_COUNT
+            OBERTEIL_COUNT = OBERTEIL_COUNT + 1
 
 
 # instantiate object of Lernfabrik class
