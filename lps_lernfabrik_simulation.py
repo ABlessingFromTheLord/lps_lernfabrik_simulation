@@ -6,10 +6,14 @@ PARTS_MADE = 0
 
 # dummy values
 KAPUTT_WSK = 10
-SAEGEN_ZEIT = 10
-DREH_ZEIT = 10
-SENK_ZEIT = 10
-ASSEMBLE_ZEIT = 10
+SAEGEN_ZEIT = 10  # IN MINUTES
+DREH_ZEIT = 10  # IN MINUTES
+SENK_ZEIT = 10  # IN MINUTES
+FRAESEN_ZEIT = 30  # IN MINUTES
+MONTAGE_ZEIT = 10  # IN MINUTES
+KLEBEN_ZEIT = 10  # IN MINUTES
+PRUEFEN_ZEIT = 10  # IN MINUTES
+VERPACKEN_ZEIT = 10  # IN MINUTES
 KAPUTT_MACHINE_A = 10
 KAPUTT_MACHINE_B = 10
 KAPUTT_MACHINE_C = 10
@@ -17,6 +21,11 @@ KAPUTT_MACHINE_D = 10
 REPAIR_ZEIT = 10
 PROZESS_ZEIT = 10
 MTTR = 10
+# ACTUAL PRODUCED PARTS
+OBERTEIL = 0
+UNTERTEIL = 0
+HALTETEIL = 0
+RING = 0
 
 
 # the factory implementation
@@ -30,7 +39,7 @@ class Lernfabrik:
 
     # processes
     def saegen(self):
-        # this methods simulates the "saegen" operation
+        #  simulates the "saegen" operation
         while True:
             PROZESS_ZEIT = SAEGEN_ZEIT
             start = self.env.now
@@ -48,7 +57,7 @@ class Lernfabrik:
         # was sollte zurückgegeben werden?
 
     def drehen(self):
-        # this methods simulates the "drehen" operation
+        #  simulates the "drehen" operation
         while True:
             PROZESS_ZEIT = DREH_ZEIT
             start = self.env.now
@@ -65,8 +74,26 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
+    def fraesen(self):
+        #  simulates the "fraesen" operation
+        while True:
+            PROZESS_ZEIT = FRAESEN_ZEIT
+            start = self.env.now
+            try:
+                yield self.env.timeout(PROZESS_ZEIT)
+
+            except sp.Interrupt:
+                self.kaputt = True
+                PROZESS_ZEIT -= (self.env.now - start)
+
+                # repairing
+                yield self.env.timeout(REPAIR_ZEIT)
+                self.kaputt = False
+
+        # was sollte zurückgegeben werden?
+
     def senken(self):
-        # this methods simulates the "senken" operation
+        #  simulates the "senken" operation
         while True:
             PROZESS_ZEIT = SENK_ZEIT
             start = self.env.now
@@ -83,10 +110,64 @@ class Lernfabrik:
 
         # was sollte zurückgegeben werden?
 
-    def assemble(self):
-        # this methods simulates the assemble operation
+    def kleben(self):
+        #  simulates the "kleben" operation
         while True:
-            PROZESS_ZEIT = ASSEMBLE_ZEIT
+            PROZESS_ZEIT = KLEBEN_ZEIT
+            start = self.env.now
+            try:
+                yield self.env.timeout(PROZESS_ZEIT)
+
+            except sp.Interrupt:
+                self.kaputt = True
+                PROZESS_ZEIT -= (self.env.now - start)
+
+                # repairing
+                yield self.env.timeout(REPAIR_ZEIT)
+                self.kaputt = False
+
+        # was sollte zurückgegeben werden?
+
+    def montage(self):
+        # simulates the "assemble" operation
+        while True:
+            PROZESS_ZEIT = MONTAGE_ZEIT
+            start = self.env.now
+            try:
+                yield self.env.timeout(PROZESS_ZEIT)
+
+            except sp.Interrupt:
+                self.kaputt = True
+                PROZESS_ZEIT -= (self.env.now - start)
+
+                # repairing
+                yield self.env.timeout(REPAIR_ZEIT)
+                self.kaputt = False
+
+        # was sollte zurückgegeben werden?
+
+    def pruefen(self):
+        # simulates the "assemble" operation
+        while True:
+            PROZESS_ZEIT = PRUEFEN_ZEIT
+            start = self.env.now
+            try:
+                yield self.env.timeout(PROZESS_ZEIT)
+
+            except sp.Interrupt:
+                self.kaputt = True
+                PROZESS_ZEIT -= (self.env.now - start)
+
+                # repairing
+                yield self.env.timeout(REPAIR_ZEIT)
+                self.kaputt = False
+
+        # was sollte zurückgegeben werden?
+
+    def verpacken(self):
+        # simulates the "assemble" operation
+        while True:
+            PROZESS_ZEIT = VERPACKEN_ZEIT
             start = self.env.now
             try:
                 yield self.env.timeout(PROZESS_ZEIT)
