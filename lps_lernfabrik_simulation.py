@@ -66,6 +66,7 @@ def machines_available(machines):
 
     # TODO: check if the required machines are same as the machines available
     # TODO:: reformat into taking the shared resources
+    # since we wait for a resource(machine) to be available, is this really a useful function?
 
 
 def get_machines_for_part(part_name):
@@ -77,6 +78,26 @@ def get_machines_for_part(part_name):
             return UNTERTEIL_MACHINES
         case "Halteteil":
             return HALTETEIL_MACHINES
+        case "Ring":
+            return RING_MACHINES
+
+
+def increment_part_count(part_name):
+    #  adds the newly created part to the globally available count of its parts type
+    match part_name:
+        case "Oberteil":
+            global OBERTEIL_COUNT
+            OBERTEIL_COUNT = OBERTEIL_COUNT +1
+        case "Unterteil":
+            global UNTERTEIL_COUNT
+            UNTERTEIL_COUNT = UNTERTEIL_COUNT + 1
+        case "Halteteil":
+            global HALTETEIL_COUNT
+            HALTETEIL_COUNT = HALTETEIL_COUNT + 1
+        case "Ring":
+            global RING_COUNT
+            RING_COUNT = RING_COUNT + 1
+
 
 
 class Lernfabrik:
@@ -85,7 +106,7 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.kaputt = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
         self.previously_created = ""  # string to denote the previously created part
-        self.next_created = ""  # string to denote the next created part
+        self.next_creating = ""  # string to denote the next created part
         self.time_run = time_run  # time in which the simulation is left to run
 
     # operation
@@ -95,14 +116,17 @@ class Lernfabrik:
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
 
         while True:
-            prozess_zeit = get_operation_time(machine)
+            operation_zeit = get_operation_time(machine)
+            request = machine.request()
             start = self.env.now
             try:
-                yield self.env.timeout(prozess_zeit)
+                yield request  # requesting a machine for running operation
+                yield self.env.timeout(operation_zeit)  # running operation
+                machine.release(request)  # releasing resource for other operations
 
             except simpy.Interrupt:
                 self.kaputt = True
-                prozess_zeit -= (self.env.now - start)
+                operation_zeit -= (self.env.now - start)  # remaining time from when breakdown occurred
 
                 # repairing
                 yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
@@ -111,47 +135,48 @@ class Lernfabrik:
                 self.kaputt = False
 
     # Helper functions
-    # TODo: ruestung function; takes in previous process and
     def get_ruestung_zeit(self, machine):
         # returns the equipping time in minutes as integer
         if machine == machine_fz12:
             return 30
 
         elif machine == machine_gz200:
-            if (self.previously_created == "Oberteil") and (self.next_created == "Oberteil"):
+            if self.previously_created == "":
                 return 0
-            elif (self.previously_created == "Oberteil") and (self.next_created == "Unterteil"):
+            elif (self.previously_created == "Oberteil") and (self.next_creating == "Oberteil"):
+                return 0
+            elif (self.previously_created == "Oberteil") and (self.next_creating == "Unterteil"):
                 return 45
-            elif (self.previously_created == "Oberteil") and (self.next_created == "Halteteil"):
+            elif (self.previously_created == "Oberteil") and (self.next_creating == "Halteteil"):
                 return 40
-            elif (self.previously_created == "Oberteil") and (self.next_created == "Ring"):
+            elif (self.previously_created == "Oberteil") and (self.next_creating == "Ring"):
                 return 45
 
-            elif (self.previously_created == "Unterteil") and (self.next_created == "Oberteil"):
+            elif (self.previously_created == "Unterteil") and (self.next_creating == "Oberteil"):
                 return 45
-            elif (self.previously_created == "Unterteil") and (self.next_created == "Unterteil"):
+            elif (self.previously_created == "Unterteil") and (self.next_creating == "Unterteil"):
                 return 0
-            elif (self.previously_created == "Unterteil") and (self.next_created == "Halteteil"):
+            elif (self.previously_created == "Unterteil") and (self.next_creating == "Halteteil"):
                 return 40
-            elif (self.previously_created == "Unterteil") and (self.next_created == "Ring"):
+            elif (self.previously_created == "Unterteil") and (self.next_creating == "Ring"):
                 return 45
 
-            elif (self.previously_created == "Halteteil") and (self.next_created == "Oberteil"):
+            elif (self.previously_created == "Halteteil") and (self.next_creating == "Oberteil"):
                 return 40
-            elif (self.previously_created == "Halteteil") and (self.next_created == "Unterteil"):
+            elif (self.previously_created == "Halteteil") and (self.next_creating == "Unterteil"):
                 return 40
-            elif (self.previously_created == "Halteteil") and (self.next_created == "Halteteil"):
+            elif (self.previously_created == "Halteteil") and (self.next_creating == "Halteteil"):
                 return 0
-            elif (self.previously_created == "Halteteil") and (self.next_created == "Ring"):
+            elif (self.previously_created == "Halteteil") and (self.next_creating == "Ring"):
                 return 45
 
-            elif (self.previously_created == "Ring") and (self.next_created == "Oberteil"):
+            elif (self.previously_created == "Ring") and (self.next_creating == "Oberteil"):
                 return 45
-            elif (self.previously_created == "Ring") and (self.next_created == "Unterteil"):
+            elif (self.previously_created == "Ring") and (self.next_creating == "Unterteil"):
                 return 45
-            elif (self.previously_created == "Ring") and (self.next_created == "Halteteil"):
+            elif (self.previously_created == "Ring") and (self.next_creating == "Halteteil"):
                 return 45
-            elif (self.previously_created == "Ring") and (self.next_created == "Ring"):
+            elif (self.previously_created == "Ring") and (self.next_creating == "Ring"):
                 return 0
 
         elif machine == machine_jaespa:
@@ -169,16 +194,20 @@ class Lernfabrik:
             return (1 - FZ12_MZ) * self.time_run
 
     def part_creation(self, part_name):
-        #  runs consequent operations to create a Unilokk part
-        # TODO: implement this function
-        if part_name == "Oberteil":
-            global OBERTEIL_COUNT
-            OBERTEIL_COUNT = OBERTEIL_COUNT + 1
+        #  runs consequent operations to create Unilokk part
+        self.next_creating = part_name
+        required_machines = get_machines_for_part(part_name)
+        for machine in required_machines:
+            equipping_time = self.get_ruestung_zeit(machine)
+            yield self.env.timeout(equipping_time)  # equipping machine
+            self.operation(machine)  # operating machine
+        #  all machines required to produce a part have been operated
+        increment_part_count(part_name)  # add newly created part
 
 
 # instantiate object of Lernfabrik class
 # test ruestung_zeit
-fabric = Lernfabrik(env, (7 * 86400))
+fabric = Lernfabrik(env, (7 * 86400))  # one week
 
 # running simulation
 env.run()
