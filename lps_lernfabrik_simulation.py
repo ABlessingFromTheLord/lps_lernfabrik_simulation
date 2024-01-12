@@ -99,7 +99,6 @@ def increment_part_count(part_name):
             RING_COUNT = RING_COUNT + 1
 
 
-
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env, time_run):
