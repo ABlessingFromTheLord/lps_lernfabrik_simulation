@@ -134,24 +134,23 @@ class Lernfabrik:
         #  to know the exact operation executing, look at the time used
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
 
-        while True:
-            operation_zeit = get_operation_time(machine)
-            request = machine.request()
-            start = self.env.now
-            try:
-                yield request  # requesting a machine for running operation
-                yield self.env.timeout(operation_zeit)  # running operation
-                machine.release(request)  # releasing resource for other operations
+        operation_zeit = get_operation_time(machine)
+        request = machine.request()
+        start = self.env.now
+        try:
+            yield request  # requesting a machine for running operation
+            yield self.env.timeout(operation_zeit)  # running operation
+            machine.release(request)  # releasing resource for other operations
 
-            except simpy.Interrupt:
-                self.kaputt = True
-                operation_zeit -= (self.env.now - start)  # remaining time from when breakdown occurred
+        except simpy.Interrupt:
+            self.kaputt = True
+            operation_zeit -= (self.env.now - start)  # remaining time from when breakdown occurred
 
-                # repairing
-                yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
-                yield self.env.timeout(60)  # repair time
-                # TODO: change factor to 60 in simulation time, and above to 1
-                self.kaputt = False
+            # repairing
+            yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
+            yield self.env.timeout(60)  # repair time
+            # TODO: change factor to 60 in simulation time, and above to 1
+            self.kaputt = False
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
