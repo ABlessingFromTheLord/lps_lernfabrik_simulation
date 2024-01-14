@@ -4,7 +4,7 @@ import simpy
 env = simpy.Environment()
 
 # instantiate machines as simpy resources
-machine_jaespa = simpy.Resource(env, capacity=1)  # Maschine zum Säegen
+machine_jaespa = simpy.Resource(env, capacity=1)  # Maschine zum Saegen
 machine_gz200 = simpy.Resource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.Resource(env, capacity=1)  # Machine zum Fräsen
 machine_arbeitsplatz = simpy.Resource(env, capacity=1)  # Machine zum Montage
@@ -137,7 +137,7 @@ class Lernfabrik:
     def get_ruestung_zeit(self, machine):
         # returns the equipping time in minutes as integer
         if machine == machine_fz12:
-            return 30
+            return 30 * 60
 
         elif machine == machine_gz200:
             if self.previously_created == "":
@@ -145,36 +145,36 @@ class Lernfabrik:
             elif (self.previously_created == "Oberteil") and (self.next_creating == "Oberteil"):
                 return 0
             elif (self.previously_created == "Oberteil") and (self.next_creating == "Unterteil"):
-                return 45
+                return 45 * 60
             elif (self.previously_created == "Oberteil") and (self.next_creating == "Halteteil"):
-                return 40
+                return 40 * 60
             elif (self.previously_created == "Oberteil") and (self.next_creating == "Ring"):
-                return 45
+                return 45 * 60
 
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Oberteil"):
-                return 45
+                return 45*60
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Unterteil"):
                 return 0
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Halteteil"):
-                return 40
+                return 40 * 60
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Ring"):
-                return 45
+                return 45 * 60
 
             elif (self.previously_created == "Halteteil") and (self.next_creating == "Oberteil"):
-                return 40
+                return 40 * 60
             elif (self.previously_created == "Halteteil") and (self.next_creating == "Unterteil"):
-                return 40
+                return 40 * 60
             elif (self.previously_created == "Halteteil") and (self.next_creating == "Halteteil"):
-                return 0
+                return 0 * 60
             elif (self.previously_created == "Halteteil") and (self.next_creating == "Ring"):
-                return 45
+                return 45 * 60
 
             elif (self.previously_created == "Ring") and (self.next_creating == "Oberteil"):
-                return 45
+                return 45 * 60
             elif (self.previously_created == "Ring") and (self.next_creating == "Unterteil"):
-                return 45
+                return 45 * 60
             elif (self.previously_created == "Ring") and (self.next_creating == "Halteteil"):
-                return 45
+                return 45 * 60
             elif (self.previously_created == "Ring") and (self.next_creating == "Ring"):
                 return 0
 
@@ -201,11 +201,12 @@ class Lernfabrik:
             yield self.env.timeout(equipping_time)  # equipping machine
             self.operation(machine)  # operating machine
         #  all machines required to produce a part have been operated
+        # part is created
         increment_part_count(part_name)  # add newly created part
+        self.previously_created = part_name
 
 
 # instantiate object of Lernfabrik class
-# test ruestung_zeit
 fabric = Lernfabrik(env, (7 * 86400))  # one week
 
 # running simulation
