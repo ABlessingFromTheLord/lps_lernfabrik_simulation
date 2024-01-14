@@ -36,13 +36,13 @@ HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
 RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz]
 
 # part names / working strings
-OEBERTEIL = "Oberteil"
+OBERTEIL = "Oberteil"
 UNTERTEIL = "Unterteil"
 HALTETEIL = "Halteteil"
 RING = "Ring"
 
 # Unilokk definition
-UNILOKK  = [OEBERTEIL, UNTERTEIL, HALTETEIL, RING]
+UNILOKK  = [OBERTEIL, UNTERTEIL, HALTETEIL, RING]
 
 # parts produced
 OBERTEIL_COUNT = 0
@@ -54,7 +54,7 @@ RING_COUNT = 0
 UNILOKK_COUNT = 0
 
 # rohmaterial
-ROHMATERIAL = 1 # single 3000mm long rod
+ROHMATERIAL = 1  # single 3000mm long rod
 
 # orders
 ORDERS = []
@@ -122,12 +122,11 @@ def increment_part_count(part_name):
 
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
-    def __init__(self, sim_env, time_run):
+    def __init__(self, sim_env):
         self.env = sim_env  # environment variable
         self.kaputt = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
-        self.time_run = time_run  # time in which the simulation is left to run
 
     # operation
     def operation(self, machine):
@@ -203,7 +202,7 @@ class Lernfabrik:
             return 0
 
     def get_machine_broken_time(self, machine):
-        # returns the time that a machine is broken
+        # returns the time that a machine is broken TODO: fix this is broken
         # it is calculated by 1 - Maschinenzuverlässigkeit * total simulation time
         # this is the downtime of a certain machine, repair time is set to a minute
         if machine == machine_jaespa:
@@ -217,17 +216,19 @@ class Lernfabrik:
         #  runs consequent operations to create Unilokk part
         self.next_creating = part_name
         required_machines = get_machines_for_part(part_name)
+
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)
             yield self.env.timeout(equipping_time)  # equipping machine
             self.operation(machine)  # operating machine
+            
         #  all machines required to produce a part have been operated
         # part is created
         increment_part_count(part_name)  # add newly created part
         self.previously_created = part_name
 
     def unilokk_parts_creation(self, raw_material):
-        #  simulates the creation of a Unilokk unit
+        #  simulates the creation of Unilokk unit
 
         while raw_material > 0:
             #  basic parts creation
@@ -244,7 +245,17 @@ class Lernfabrik:
 
 
 # instantiate object of Lernfabrik class
-fabric = Lernfabrik(env, (7 * 86400))  # one week
+fabric = Lernfabrik(env)  # one week
+fabric.unilokk_parts_creation(ROHMATERIAL)
+
+print("OBERTEIL: ", OBERTEIL_COUNT)
+print("UNTERTEIL: ", UNTERTEIL_COUNT)
+print("HALTETEIL: ", HALTETEIL_COUNT)
+print("RING: ", RING_COUNT)
+fabric.unilokk_parts_assembly()
 
 # running simulation
-env.run()
+env.run(until=7*86400)
+
+# analysis and results
+print("created ", UNILOKK_COUNT, " Unilokks")
