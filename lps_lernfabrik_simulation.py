@@ -42,7 +42,7 @@ HALTETEIL = "Halteteil"
 RING = "Ring"
 
 # Unilokk definition
-UNILOKK  = [OBERTEIL, UNTERTEIL, HALTETEIL, RING]
+UNILOKK = [OBERTEIL, UNTERTEIL, HALTETEIL, RING]
 
 # parts produced
 OBERTEIL_COUNT = 0
@@ -220,8 +220,8 @@ class Lernfabrik:
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)
             yield self.env.timeout(equipping_time)  # equipping machine
-            self.operation(machine)  # operating machine
-            
+            yield self.env.process(self.operation(machine))  # operating machine
+
         #  all machines required to produce a part have been operated
         # part is created
         increment_part_count(part_name)  # add newly created part
@@ -233,26 +233,25 @@ class Lernfabrik:
         while raw_material > 0:
             #  basic parts creation
             for part in UNILOKK:
-                self.part_creation(part)
+                yield self.env.process(self.part_creation(part))  # process to create a part
             raw_material = raw_material - 1
 
     def unilokk_parts_assembly(self):
         while True:
             if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
-                self.operation(machine_arbeitsplatz_2)
+                yield self.env.process(self.operation(machine_arbeitsplatz_2))
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
 
 
 # instantiate object of Lernfabrik class
 fabric = Lernfabrik(env)  # one week
-fabric.unilokk_parts_creation(ROHMATERIAL)
+fabric.operation(machine_jaespa)
 
 print("OBERTEIL: ", OBERTEIL_COUNT)
 print("UNTERTEIL: ", UNTERTEIL_COUNT)
 print("HALTETEIL: ", HALTETEIL_COUNT)
 print("RING: ", RING_COUNT)
-fabric.unilokk_parts_assembly()
 
 # running simulation
 env.run(until=7*86400)
