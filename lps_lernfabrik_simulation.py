@@ -19,8 +19,8 @@ SAEGEN_ZEIT = 10  # IN MINUTES
 DREH_ZEIT = 10  # IN MINUTES
 SENK_ZEIT = 10  # IN MINUTES
 FRAESEN_ZEIT = 30  # IN MINUTES
-MONTAGE_ZEIT = 10  # IN MINUTES
 KLEBEN_ZEIT = 10  # IN MINUTES
+MONTAGE_ZEIT = 10  # IN MINUTES
 PRUEFEN_ZEIT = 10  # IN MINUTES
 VERPACKEN_ZEIT = 10  # IN MINUTES
 JAESPA_MZ = 0.98
@@ -28,16 +28,35 @@ GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
 REPAIR_ZEIT = 10
 MTTR = 10
+
+# machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
 UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
 HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
 RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz]
-# ACTUAL PRODUCED PARTS
+
+# part names / working strings
+OEBERTEIL = "Oberteil"
+UNTERTEIL = "Unterteil"
+HALTETEIL = "Halteteil"
+RING = "Ring"
+
+# Unilokk definition
+UNILOKK  = [OEBERTEIL, UNTERTEIL, HALTETEIL, RING]
+
+# parts produced
 OBERTEIL_COUNT = 0
 UNTERTEIL_COUNT = 0
 HALTETEIL_COUNT = 0
 RING_COUNT = 0
-# ORDERS
+
+# unilokk created
+UNILOKK_COUNT = 0
+
+# rohmaterial
+ROHMATERIAL = 1 # single 3000mm long rod
+
+# orders
 ORDERS = []
 
 
@@ -52,6 +71,8 @@ def get_operation_time(machine):
         return FRAESEN_ZEIT
     elif (machine[0] == machine_arbeitsplatz) & (machine[1] == machine_gz200):
         return SENK_ZEIT
+    elif machine == machine_arbeitsplatz_2:
+        return KLEBEN_ZEIT + MONTAGE_ZEIT + PRUEFEN_ZEIT + VERPACKEN_ZEIT
 
 
 # the factory implementation
@@ -87,16 +108,16 @@ def increment_part_count(part_name):
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
-            OBERTEIL_COUNT = OBERTEIL_COUNT +1
+            OBERTEIL_COUNT = OBERTEIL_COUNT + 17
         case "Unterteil":
             global UNTERTEIL_COUNT
-            UNTERTEIL_COUNT = UNTERTEIL_COUNT + 1
+            UNTERTEIL_COUNT = UNTERTEIL_COUNT + 11
         case "Halteteil":
             global HALTETEIL_COUNT
-            HALTETEIL_COUNT = HALTETEIL_COUNT + 1
+            HALTETEIL_COUNT = HALTETEIL_COUNT + 48
         case "Ring":
             global RING_COUNT
-            RING_COUNT = RING_COUNT + 1
+            RING_COUNT = RING_COUNT + 97
 
 
 class Lernfabrik:
@@ -204,6 +225,22 @@ class Lernfabrik:
         # part is created
         increment_part_count(part_name)  # add newly created part
         self.previously_created = part_name
+
+    def unilokk_parts_creation(self, raw_material):
+        #  simulates the creation of a Unilokk unit
+
+        while raw_material > 0:
+            #  basic parts creation
+            for part in UNILOKK:
+                self.part_creation(part)
+            raw_material = raw_material - 1
+
+    def unilokk_parts_assembly(self):
+        while True:
+            if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
+                self.operation(machine_arbeitsplatz_2)
+                global UNILOKK_COUNT
+                UNILOKK_COUNT = UNILOKK_COUNT + 1
 
 
 # instantiate object of Lernfabrik class
