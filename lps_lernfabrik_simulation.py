@@ -15,14 +15,14 @@ PARTS_MADE = 0
 
 # dummy values
 KAPUTT_WSK = 10
-SAEGEN_ZEIT = 10  # IN MINUTES
-DREH_ZEIT = 10  # IN MINUTES
-SENK_ZEIT = 10  # IN MINUTES
-FRAESEN_ZEIT = 30  # IN MINUTES
-KLEBEN_ZEIT = 10  # IN MINUTES
-MONTAGE_ZEIT = 10  # IN MINUTES
-PRUEFEN_ZEIT = 10  # IN MINUTES
-VERPACKEN_ZEIT = 10  # IN MINUTES
+SAEGEN_ZEIT = 10 * 60  # IN MINUTES
+DREH_ZEIT = 10 * 60  # IN MINUTES
+SENK_ZEIT = 10 * 60  # IN MINUTES
+FRAESEN_ZEIT = 10 * 60  # IN MINUTES
+KLEBEN_ZEIT = 10 * 60  # IN MINUTES
+MONTAGE_ZEIT = 10 * 60  # IN MINUTES
+PRUEFEN_ZEIT = 10 * 60  # IN MINUTES
+VERPACKEN_ZEIT = 10 * 60  # IN MINUTES
 JAESPA_MZ = 0.98
 GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
@@ -33,7 +33,7 @@ MTTR = 10
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
 UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
 HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz]
+RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
 
 # part names / working strings
 OBERTEIL = "Oberteil"
@@ -69,7 +69,7 @@ def get_operation_time(machine):
         return DREH_ZEIT
     elif machine == machine_fz12:
         return FRAESEN_ZEIT
-    elif (machine[0] == machine_arbeitsplatz) & (machine[1] == machine_gz200):
+    elif machine == machine_arbeitsplatz:
         return SENK_ZEIT
     elif machine == machine_arbeitsplatz_2:
         return KLEBEN_ZEIT + MONTAGE_ZEIT + PRUEFEN_ZEIT + VERPACKEN_ZEIT
@@ -133,7 +133,6 @@ class Lernfabrik:
         #  simulates an operation, it is an abstract function
         #  to know the exact operation executing, look at the time used
         #  for example, if SAEGEN_ZEIT is used then the process is saegen
-
         operation_zeit = get_operation_time(machine)
         request = machine.request()
         start = self.env.now
@@ -200,6 +199,9 @@ class Lernfabrik:
         elif machine == machine_jaespa:
             return 0
 
+        elif (machine == machine_arbeitsplatz) or (machine == machine_arbeitsplatz_2):
+            return 0
+
     def get_machine_broken_time(self, machine):
         # returns the time that a machine is broken TODO: fix this is broken
         # it is calculated by 1 - Maschinenzuverlässigkeit * total simulation time
@@ -235,7 +237,11 @@ class Lernfabrik:
                 yield self.env.process(self.part_creation(part))  # process to create a part
             raw_material = raw_material - 1
 
-    def unilokk_parts_assembly(self):
+    def unilokk_parts_assembly(self, raw_material):
+        # simulates the assembling of the Unilokk parts into Unilokk
+        yield self.env.process(self.unilokk_parts_creation(raw_material))  # first create the parts
+
+        # then assemble them into Unilokk
         while True:
             if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
                 yield self.env.process(self.operation(machine_arbeitsplatz_2))
@@ -244,16 +250,16 @@ class Lernfabrik:
 
 
 # instantiate object of Lernfabrik class
-fabric = Lernfabrik(env)  # one week
-fabric.operation(machine_jaespa)
+fabric = Lernfabrik(env)
+env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
 
+# running simulation
+env.run(until=100000)
+
+# analysis and results
 print("OBERTEIL: ", OBERTEIL_COUNT)
 print("UNTERTEIL: ", UNTERTEIL_COUNT)
 print("HALTETEIL: ", HALTETEIL_COUNT)
 print("RING: ", RING_COUNT)
 
-# running simulation
-env.run(until=7*86400)
-
-# analysis and results
-print("created ", UNILOKK_COUNT, " Unilokks")
+print("created: ", UNILOKK_COUNT, " Unilokks")
