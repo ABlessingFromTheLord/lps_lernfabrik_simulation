@@ -104,10 +104,10 @@ def get_machines_for_part(part_name):
 
 
 def increase_part_count(part_name):
-    #  manipulates the part cou´nts, ie, increases if the operations for parts
-    #  creation are successfully executed or decreases if a part is used to
-    #  create whole unilokk
-    #  operation is a string "increase" for addition or "decrease" for subtraction
+    #  increase the respective part count after the machines for part
+    #  creation have been successfully executed
+    #  for a 3000mm Stange, 17 oberteil, 11 unterteil, 48 halteteil and 97
+    #  Rings are created and hence they are incremented by these values
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
@@ -117,13 +117,14 @@ def increase_part_count(part_name):
             UNTERTEIL_COUNT = UNTERTEIL_COUNT + 11
         case "Halteteil":
             global HALTETEIL_COUNT
-            HALTETEIL_COUNT = HALTETEIL_COUNT + 48
+            HALTETEIL_COUNT = HALTETEIL_COUNT + 49
         case "Ring":
             global RING_COUNT
             RING_COUNT = RING_COUNT + 97
 
 
 def decrease_part_count(part_name):
+    #  decrease respective part count after a partis used for order fulfillment
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
@@ -137,6 +138,7 @@ def decrease_part_count(part_name):
         case "Ring":
             global RING_COUNT
             RING_COUNT = RING_COUNT - 1
+
 
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
@@ -260,6 +262,7 @@ class Lernfabrik:
     def unilokk_parts_assembly(self, raw_material):
         # simulates the assembling of the Unilokk parts into Unilokk
         yield self.env.process(self.unilokk_parts_creation(raw_material))  # first create the parts
+        i = 1
 
         # then assemble them into Unilokk
         while True:
@@ -273,6 +276,10 @@ class Lernfabrik:
                 # increase Unilokk count for the one that is created
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
+                print("unilokk ", i, " was created at ", self.env.now)
+                i = i + 1
+            else:
+                break
 
 
 # instantiate object of Lernfabrik class
@@ -280,7 +287,7 @@ fabric = Lernfabrik(env)
 env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
 
 # running simulation
-env.run(until=86400*4)
+env.run(until=86400)
 
 # analysis and results
 print("OBERTEIL: ", OBERTEIL_COUNT)
