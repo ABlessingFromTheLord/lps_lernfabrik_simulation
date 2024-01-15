@@ -15,14 +15,14 @@ PARTS_MADE = 0
 
 # dummy values
 KAPUTT_WSK = 10
-SAEGEN_ZEIT = 10 * 60  # IN MINUTES
-DREH_ZEIT = 10 * 60  # IN MINUTES
-SENK_ZEIT = 10 * 60  # IN MINUTES
-FRAESEN_ZEIT = 10 * 60  # IN MINUTES
-KLEBEN_ZEIT = 10 * 60  # IN MINUTES
-MONTAGE_ZEIT = 10 * 60  # IN MINUTES
-PRUEFEN_ZEIT = 10 * 60  # IN MINUTES
-VERPACKEN_ZEIT = 10 * 60  # IN MINUTES
+SAEGEN_ZEIT = 5 * 60  # IN MINUTES
+DREH_ZEIT = 5 * 60  # IN MINUTES
+SENK_ZEIT = 5 * 60  # IN MINUTES
+FRAESEN_ZEIT = 5 * 60  # IN MINUTES
+KLEBEN_ZEIT = 5 * 60  # IN MINUTES
+MONTAGE_ZEIT = 5 * 60  # IN MINUTES
+PRUEFEN_ZEIT = 5 * 60  # IN MINUTES
+VERPACKEN_ZEIT = 5 * 60  # IN MINUTES
 JAESPA_MZ = 0.98
 GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
@@ -103,8 +103,11 @@ def get_machines_for_part(part_name):
             return RING_MACHINES
 
 
-def increment_part_count(part_name):
-    #  adds the newly created part to the globally available count of its parts type
+def increase_part_count(part_name):
+    #  manipulates the part cou´nts, ie, increases if the operations for parts
+    #  creation are successfully executed or decreases if a part is used to
+    #  create whole unilokk
+    #  operation is a string "increase" for addition or "decrease" for subtraction
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
@@ -119,6 +122,21 @@ def increment_part_count(part_name):
             global RING_COUNT
             RING_COUNT = RING_COUNT + 97
 
+
+def decrease_part_count(part_name):
+    match part_name:
+        case "Oberteil":
+            global OBERTEIL_COUNT
+            OBERTEIL_COUNT = OBERTEIL_COUNT - 1
+        case "Unterteil":
+            global UNTERTEIL_COUNT
+            UNTERTEIL_COUNT = UNTERTEIL_COUNT - 1
+        case "Halteteil":
+            global HALTETEIL_COUNT
+            HALTETEIL_COUNT = HALTETEIL_COUNT - 1
+        case "Ring":
+            global RING_COUNT
+            RING_COUNT = RING_COUNT - 1
 
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
@@ -225,7 +243,7 @@ class Lernfabrik:
 
         #  all machines required to produce a part have been operated
         # part is created
-        increment_part_count(part_name)  # add newly created part
+        increase_part_count(part_name)  # add newly created part
         self.previously_created = part_name
 
     def unilokk_parts_creation(self, raw_material):
@@ -236,6 +254,8 @@ class Lernfabrik:
             for part in UNILOKK:
                 yield self.env.process(self.part_creation(part))  # process to create a part
             raw_material = raw_material - 1
+            global ROHMATERIAL
+            ROHMATERIAL = ROHMATERIAL - 1
 
     def unilokk_parts_assembly(self, raw_material):
         # simulates the assembling of the Unilokk parts into Unilokk
@@ -244,7 +264,13 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
-                yield self.env.process(self.operation(machine_arbeitsplatz_2))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2))  # assembling parts to create Unilokk
+                # decrement for the parts used above to create a whole Unilokk
+                decrease_part_count(OBERTEIL)
+                decrease_part_count(UNTERTEIL)
+                decrease_part_count(HALTETEIL)
+                decrease_part_count(RING)
+                # increase Unilokk count for the one that is created
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
 
@@ -254,7 +280,7 @@ fabric = Lernfabrik(env)
 env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
 
 # running simulation
-env.run(until=100000)
+env.run(until=86400*4)
 
 # analysis and results
 print("OBERTEIL: ", OBERTEIL_COUNT)
@@ -263,3 +289,4 @@ print("HALTETEIL: ", HALTETEIL_COUNT)
 print("RING: ", RING_COUNT)
 
 print("created: ", UNILOKK_COUNT, " Unilokks")
+print("remaining raw materials: ", ROHMATERIAL)
