@@ -282,6 +282,25 @@ class Lernfabrik:
                 break
 
 
+def get_unilokk_parts(orders):
+    # received orders as parameter and returns the total number of
+    # parts needed for the entire order
+    # these parts are saved in an array that is returned
+    # index 0 = Oberteile, 1 = Unterteile, 2 = Halteteile, 3 = Ring
+    parts = [0, 0, 0, 0]
+
+    for order in orders:
+        for part in parts:
+            part += order
+    return parts
+
+
+def serve_orders_algorithm():
+    # order fulfillment algorithm
+    # empty for now
+    return 0
+
+
 # instantiate object of Lernfabrik class
 fabric = Lernfabrik(env)
 env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
