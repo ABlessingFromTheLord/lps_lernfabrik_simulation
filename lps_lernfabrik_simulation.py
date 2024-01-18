@@ -13,8 +13,10 @@ machine_arbeitsplatz_2 = simpy.Resource(env, capacity=1)  # Machine zum Montage
 # global variables
 PARTS_MADE = 0
 
-# dummy values
+# breaking probability
 KAPUTT_WSK = 10
+
+# machine operation times, ie, Zykluszeit + Verteilzeit
 SAEGEN_ZEIT = 5 * 60  # IN MINUTES
 DREH_ZEIT = 5 * 60  # IN MINUTES
 SENK_ZEIT = 5 * 60  # IN MINUTES
@@ -140,6 +142,28 @@ def decrease_part_count(part_name):
             RING_COUNT = RING_COUNT - 1
 
 
+def get_operating_time(machine, part_name):
+    #  returns the operating time for a certain machine on a specific Unilokk part
+    match part_name:
+        case "Oberteil":
+            if machine == machine_jaespa: return 34
+            elif machine == machine_gz200: return 287
+            elif machine == machine_fz12: return 376
+
+        case "Unterteil":
+            if machine == machine_jaespa: return 20
+            elif machine == machine_gz200: return 247
+
+        case "Halteteil":
+            if machine == machine_jaespa: return 4
+            elif machine == machine_gz200: return 255
+
+        case "Ring":
+            if machine == machine_jaespa: return 3
+            elif machine == machine_gz200: return 185
+            elif machine == machine_arbeitsplatz: return 20
+
+
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env):
@@ -149,26 +173,25 @@ class Lernfabrik:
         self.next_creating = ""  # string to denote the next created part
 
     # operation
-    def operation(self, machine):
+    def operation(self, machine, equipping_time, operating_time):
         #  simulates an operation, it is an abstract function
-        #  to know the exact operation executing, look at the time used
-        #  for example, if SAEGEN_ZEIT is used then the process is saegen
-        operation_zeit = get_operation_time(machine)
         request = machine.request()
+        yield self.env.timeout(equipping_time)  # equipping machine
+
+        # operating machine after equipping
         start = self.env.now
         try:
             yield request  # requesting a machine for running operation
-            yield self.env.timeout(operation_zeit)  # running operation
+            yield self.env.timeout(operating_time)  # running operation
             machine.release(request)  # releasing resource for other operations
 
         except simpy.Interrupt:
             self.kaputt = True
-            operation_zeit -= (self.env.now - start)  # remaining time from when breakdown occurred
+            operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
             # repairing
             yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
             yield self.env.timeout(60)  # repair time
-            # TODO: change factor to 60 in simulation time, and above to 1
             self.kaputt = False
 
     # Helper functions
@@ -239,9 +262,10 @@ class Lernfabrik:
         required_machines = get_machines_for_part(part_name)
 
         for machine in required_machines:
-            equipping_time = self.get_ruestung_zeit(machine)
-            yield self.env.timeout(equipping_time)  # equipping machine
-            yield self.env.process(self.operation(machine))  # operating machine
+            equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
+            operating_time = get_operating_time(machine, part_name)  # getting operation time
+            # running operation
+            yield self.env.process(self.operation(machine, equipping_time,operating_time))  # operating machine
 
         #  all machines required to produce a part have been operated
         # part is created
