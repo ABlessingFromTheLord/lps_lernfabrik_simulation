@@ -1,4 +1,5 @@
 import simpy
+import random
 
 # simpy environment declaration
 env = simpy.Environment()
@@ -15,21 +16,12 @@ PARTS_MADE = 0
 
 # breaking probability
 KAPUTT_WSK = 10
-
-# machine operation times, ie, Zykluszeit + Verteilzeit
-SAEGEN_ZEIT = 5 * 60  # IN MINUTES
-DREH_ZEIT = 5 * 60  # IN MINUTES
-SENK_ZEIT = 5 * 60  # IN MINUTES
-FRAESEN_ZEIT = 5 * 60  # IN MINUTES
-KLEBEN_ZEIT = 5 * 60  # IN MINUTES
-MONTAGE_ZEIT = 5 * 60  # IN MINUTES
-PRUEFEN_ZEIT = 5 * 60  # IN MINUTES
-VERPACKEN_ZEIT = 5 * 60  # IN MINUTES
 JAESPA_MZ = 0.98
 GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
-REPAIR_ZEIT = 10
-MTTR = 10
+BROKEN_ZEIT = 60
+REPAIR_ZEIT = 60
+MTTR = 60
 
 # machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
@@ -63,35 +55,6 @@ ORDERS = []
 
 
 # global helper functions
-def get_operation_time(machine):
-    #  returns the time that a machine(s) performs a certain operation
-    if machine == machine_jaespa:
-        return SAEGEN_ZEIT
-    elif machine == machine_gz200:
-        return DREH_ZEIT
-    elif machine == machine_fz12:
-        return FRAESEN_ZEIT
-    elif machine == machine_arbeitsplatz:
-        return SENK_ZEIT
-    elif machine == machine_arbeitsplatz_2:
-        return KLEBEN_ZEIT + MONTAGE_ZEIT + PRUEFEN_ZEIT + VERPACKEN_ZEIT
-
-
-# the factory implementation
-def machines_available(machines):
-    # receives an array of the machines in the factory
-    # returns true if the required resources are free
-    required_machines = []
-
-    for machine in machines:
-        if not machine.working:
-            required_machines.append(machine)
-
-    # TODO: check if the required machines are same as the machines available
-    # TODO:: reformat into taking the shared resources
-    # since we wait for a resource(machine) to be available, is this really a useful function?
-
-
 def get_machines_for_part(part_name):
     #  returns the machines required to create a certain part of Unilokk
     match part_name:
@@ -142,11 +105,23 @@ def decrease_part_count(part_name):
             RING_COUNT = RING_COUNT - 1
 
 
+def get_mz(machine):
+    # returns the Machinezuverlässigkeit for a machine while producing a certain part
+    if machine == machine_jaespa:
+        return 0.98
+    elif machine == machine_gz200:
+        return 0.85
+    else:
+        return 0
+    # TODO: FZ12 left, also the MZ in Ring production to be checked
+
+
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env):
         self.env = sim_env  # environment variable
-        self.kaputt = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
+        self.machine_is_running = False  # if True means currently a machine is in execution
+        self.break_machine_now = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
@@ -156,6 +131,8 @@ class Lernfabrik:
         #  simulates an operation, it is an abstract function
         request = machine.request()
         yield self.env.timeout(equipping_time)  # equipping machine
+        # machine is running after equipping
+        self.env.process(self.break_machine(machine))
 
         # operating machine after equipping
         start = self.env.now
@@ -165,13 +142,12 @@ class Lernfabrik:
             machine.release(request)  # releasing resource for other operations
 
         except simpy.Interrupt:
-            self.kaputt = True
+            print("machine ", machine, "broke down at ", self.env.now)
             operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
             # repairing
-            yield self.env.timeout(self.get_machine_broken_time(machine))  # broken time
-            yield self.env.timeout(60)  # repair time
-            self.kaputt = False
+            yield self.env.timeout(BROKEN_ZEIT)  # broken time
+            yield self.env.timeout(REPAIR_ZEIT)  # repair time
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
@@ -259,16 +235,15 @@ class Lernfabrik:
                 elif machine == machine_arbeitsplatz:
                     return 10
 
-    def get_machine_broken_time(self, machine):
-        # returns the time that a machine is broken TODO: fix this is broken
-        # it is calculated by 1 - Maschinenzuverlässigkeit * total simulation time
-        # this is the downtime of a certain machine, repair time is set to a minute
-        if machine == machine_jaespa:
-            return (1 - JAESPA_MZ) * self.time_run
-        elif machine == machine_gz200:
-            return (1 - GZ_200_MZ) * self.time_run
-        elif machine == machine_fz12:
-            return (1 - FZ12_MZ) * self.time_run
+    def break_machine(self, machine):
+        #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
+        while True:
+            break_or_not = random.random() < get_mz(machine)
+
+            # if true then machine breaks down, else continues running
+            if break_or_not:
+                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+                self.env.process.interrupt(self)
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -278,7 +253,6 @@ class Lernfabrik:
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
-            print(part_name, machine, "eq time: ", equipping_time, "op time", operating_time)
             # running operation
             yield self.env.process(self.operation(machine, equipping_time, operating_time))  # operating machine
             if machine == machine_gz200:
