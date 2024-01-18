@@ -59,7 +59,7 @@ UNILOKK_COUNT = 0
 ROHMATERIAL = 1  # single 3000mm long rod
 
 # orders
-ORDERS = []
+ORDERS = [25, 10, 35, 17, 5]
 
 
 # global helper functions
@@ -330,23 +330,25 @@ def get_unilokk_parts(orders):
     # parts needed for the entire order
     # these parts are saved in an array that is returned
     # index 0 = Oberteile, 1 = Unterteile, 2 = Halteteile, 3 = Ring
-    parts = [0, 0, 0, 0]
+    temp = 0
 
     for order in orders:
-        for part in parts:
-            part += order
-    return parts
+        temp += order
+
+    return [temp, temp, temp, temp]
 
 
-def serve_orders_algorithm():
+def serve_orders_algorithm(orders):
     # order fulfillment algorithm
-    # empty for now
-    return 0
+
+    #  create total parts needed for order
+    parts = get_unilokk_parts(orders)
 
 
 # instantiate object of Lernfabrik class
 fabric = Lernfabrik(env)
-env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
+# env.process(fabric.unilokk_parts_assembly(ROHMATERIAL))
+print(serve_orders_algorithm(ORDERS), "\n\n\n")
 
 # running simulation
 env.run(until=86400)
