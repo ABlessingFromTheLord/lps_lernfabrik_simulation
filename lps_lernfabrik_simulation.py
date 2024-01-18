@@ -142,28 +142,6 @@ def decrease_part_count(part_name):
             RING_COUNT = RING_COUNT - 1
 
 
-def get_operating_time(machine, part_name):
-    #  returns the operating time for a certain machine on a specific Unilokk part
-    match part_name:
-        case "Oberteil":
-            if machine == machine_jaespa: return 34
-            elif machine == machine_gz200: return 287
-            elif machine == machine_fz12: return 376
-
-        case "Unterteil":
-            if machine == machine_jaespa: return 20
-            elif machine == machine_gz200: return 247
-
-        case "Halteteil":
-            if machine == machine_jaespa: return 4
-            elif machine == machine_gz200: return 255
-
-        case "Ring":
-            if machine == machine_jaespa: return 3
-            elif machine == machine_gz200: return 185
-            elif machine == machine_arbeitsplatz: return 20
-
-
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env):
@@ -171,6 +149,7 @@ class Lernfabrik:
         self.kaputt = False  # boolean for denoting when a machine is broken # TODO: check how to optimise
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
+        self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
 
     # operation
     def operation(self, machine, equipping_time, operating_time):
@@ -245,6 +224,41 @@ class Lernfabrik:
         elif (machine == machine_arbeitsplatz) or (machine == machine_arbeitsplatz_2):
             return 0
 
+    def get_operating_time(self, machine, part_name):
+        #  returns the operating time for a certain machine on a specific Unilokk part
+        match part_name:
+            case "Oberteil":
+                if machine == machine_jaespa:
+                    return 34
+                elif machine == machine_gz200:
+                    return 287
+                elif machine == machine_fz12:
+                    return 376
+
+            case "Unterteil":
+                if machine == machine_jaespa:
+                    return 20
+                elif machine == machine_gz200:
+                    return 247
+
+            case "Halteteil":
+                if machine == machine_jaespa:
+                    return 4
+                elif machine == machine_gz200:
+                    return 255
+
+            case "Ring":
+                if machine == machine_jaespa:
+                    return 3
+                elif machine == machine_gz200:
+                    match self.done_once:
+                        case True:
+                            return 10
+                        case False:
+                            return 185
+                elif machine == machine_arbeitsplatz:
+                    return 10
+
     def get_machine_broken_time(self, machine):
         # returns the time that a machine is broken TODO: fix this is broken
         # it is calculated by 1 - Maschinenzuverlässigkeit * total simulation time
@@ -263,14 +277,18 @@ class Lernfabrik:
 
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
-            operating_time = get_operating_time(machine, part_name)  # getting operation time
+            operating_time = self.get_operating_time(machine, part_name)  # getting operation time
+            print(part_name, machine, "eq time: ", equipping_time, "op time", operating_time)
             # running operation
-            yield self.env.process(self.operation(machine, equipping_time,operating_time))  # operating machine
+            yield self.env.process(self.operation(machine, equipping_time, operating_time))  # operating machine
+            if machine == machine_gz200:
+                self.previously_created = part_name  # setting the control for get_ruestung_zeit function
+                if part_name == "Ring":
+                    self.done_once = not self.done_once  # setting control for get_operating_time function
 
         #  all machines required to produce a part have been operated
         # part is created
         increase_part_count(part_name)  # add newly created part
-        self.previously_created = part_name
 
     def unilokk_parts_creation(self, raw_material):
         #  simulates the creation of Unilokk unit
@@ -291,7 +309,8 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
-                yield self.env.process(self.operation(machine_arbeitsplatz_2))  # assembling parts to create Unilokk
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 0, 180))  # assembling parts to create
+                # -Unilokk
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count(OBERTEIL)
                 decrease_part_count(UNTERTEIL)
