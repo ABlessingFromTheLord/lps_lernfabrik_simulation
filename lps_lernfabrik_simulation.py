@@ -237,12 +237,13 @@ class Lernfabrik:
     def break_machine(self, machine):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while True:
-            break_or_not = random.random() > get_mz(machine)
-            yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+            if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
+                break_or_not = random.random() > get_mz(machine)
+                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
-            # if true then machine breaks down, else continues running
-            if break_or_not and self.machine_running and not self.currently_broken:
-                self.process.interrupt()
+                # if true then machine breaks down, else continues running
+                if break_or_not and self.machine_running and not self.currently_broken and self.process is not None:
+                    self.process.interrupt()
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -252,18 +253,19 @@ class Lernfabrik:
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
+            env.process(self.break_machine(machine))  # starting breakdown function
 
-            request = machine.request()
-            yield request  # requesting a machine for running operation
+            # request = machine.request()
+            # yield request  # requesting a machine for running operation
+            with machine.request() as request:
+                yield request
+                # running operation
+                yield self.env.timeout(equipping_time)  # equipping a machine
+                self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
+                yield self.process
+                self.process = None
 
-            # running operation
-            yield self.env.timeout(equipping_time)  # equipping a machine
-            self.env.process(self.break_machine(machine))  # starting breakdown function
-            print("got in part creation")
-            self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
-            yield self.process
-
-            machine.release(request)  # releasing resource for other operations
+            # machine.release(request)  # releasing resource for other operations
 
             if machine == machine_gz200:
                 self.previously_created = part_name  # setting the control for get_ruestung_zeit function
@@ -273,6 +275,7 @@ class Lernfabrik:
         #  all machines required to produce a part have been operated
         # part is created
         increase_part_count(part_name)  # add newly created part
+        print(part_name, "was created at ", self.env.now)
 
     def unilokk_parts_creation(self, raw_material):
         #  simulates the creation of Unilokk unit
@@ -280,7 +283,6 @@ class Lernfabrik:
         while raw_material > 0:
             #  basic parts creation
             for part in UNILOKK:
-                print("got in unilokk part creation")
                 yield self.env.process(self.part_creation(part))  # process to create a part
             raw_material = raw_material - 1
 
@@ -289,17 +291,13 @@ class Lernfabrik:
 
     def whole_process(self, raw_material):
         # simulates the assembling of the Unilokk parts into Unilokk
-        self.env.process(self.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
+        yield self.env.process(self.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
+        print("Done creating parts")
         i = 1
 
         # then assemble them into Unilokk
         while True:
-            global OBERTEIL_COUNT
-            global UNTERTEIL_COUNT
-            global HALTETEIL_COUNT
-            global RING_COUNT
-
-            if (OBERTEIL_COUNT > 0) & (UNTERTEIL_COUNT > 0) & (HALTETEIL_COUNT > 0) & (RING_COUNT > 0):
+            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
                 print("arrives in if")
                 self.process = self.env.process(self.operation(machine_arbeitsplatz_2, 180))
                 yield self.process  # assembling parts to create Unilokk
@@ -345,6 +343,7 @@ fabric = Lernfabrik(env)
 env.process(fabric.whole_process(ROHMATERIAL))
 
 # running simulation
+
 env.run(until=86400)
 
 # analysis and results
