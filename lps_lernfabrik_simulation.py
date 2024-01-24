@@ -22,7 +22,7 @@ GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
-MTTR = 60  # TODO: setting it to one minute causes terminated processes to be interrupted
+MTTR = 2 * 60  # TODO: setting it to one minute causes terminated processes to be interrupted
 
 # machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
@@ -123,7 +123,6 @@ class Lernfabrik:
         self.process = None
         self.env = sim_env  # environment variable
         self.currently_broken = False  # boolean for denoting when a machine is broken
-        self.machine_running = False
         self.done_part_creation = False
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
@@ -137,10 +136,9 @@ class Lernfabrik:
         while operating_time:
             start = self.env.now
             try:
-                self.machine_running = True
                 print(f"execution time is {operating_time} seconds, started execution at {self.env.now}")
                 yield self.env.timeout(operating_time)  # running operation
-                self.machine_running = False
+                self.process = None
                 operating_time = 0
                 print(f"finish time is {self.env.now} seconds")
 
@@ -238,28 +236,26 @@ class Lernfabrik:
 
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while not self.done_part_creation:
-            while True:
-                if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
-                    break_or_not = random.random() > get_mz(machine)
-                    yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+        while True:
+            if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
+                break_or_not = random.random() > get_mz(machine)
+                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
-                    # if true then machine breaks down, else continues running
-                    if break_or_not and self.machine_running and self.process is not None and not self.currently_broken:
-                        with machine.request(priority=priority, preempt=preempt) as request:
-                            assert isinstance(self.env.now, int), type(self.env.now)
-                            yield request
+                # if true then machine breaks down, else continues running
+                if break_or_not and not self.currently_broken:
+                    with machine.request(priority=priority, preempt=preempt) as request:
+                        assert isinstance(self.env.now, int), type(self.env.now)
+                        yield request
 
-                            self.currently_broken = True
+                        self.currently_broken = True
 
-                            assert isinstance(self.env.now, int), type(self.env.now)
-
-                            if self.process is not None:
-                                # print(f"Machine {machine} broke down at {self.env.now}")
-                                self.process.interrupt()
-                                # yield self.env.timeout(50)
-                                # print(f"Machine {machine} continued running at {self.env.now}")
-                            self.currently_broken = False
+                        assert isinstance(self.env.now, int), type(self.env.now)
+                        if self.process is not None:
+                            # print(f"Machine {machine} broke down at {self.env.now}")
+                            self.process.interrupt()
+                            # yield self.env.timeout(50)
+                            # print(f"Machine {machine} continued running at {self.env.now}")
+                        self.currently_broken = False
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -270,16 +266,15 @@ class Lernfabrik:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
 
-            env.process(self.break_machine(machine, 2, True))  # starting breakdown function
-
             with machine.request(priority=1, preempt=False) as request:
                 yield request
                 # running operation
                 yield self.env.timeout(equipping_time)  # equipping a machine
                 self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
+                env.process(self.break_machine(machine, 2, True))  # starting breakdown function
                 yield self.process
 
-                self.process = None
+                # self.process = None
 
             if machine == machine_gz200:
                 self.previously_created = part_name  # setting the control for get_ruestung_zeit function
@@ -304,10 +299,6 @@ class Lernfabrik:
             ROHMATERIAL = ROHMATERIAL - 1
 
     def whole_process(self, raw_material):
-        # simulates the assembling of the Unilokk parts into Unilokk
-        yield self.env.process(self.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
-        print("Done creating parts")
-        self.done_part_creation = True
         i = 1
 
         # then assemble them into Unilokk
@@ -354,6 +345,8 @@ def serve_orders_algorithm():
 
 # instantiate object of Lernfabrik class
 fabric = Lernfabrik(env)
+# simulates the assembling of the Unilokk parts into Unilokk
+env.process(fabric.unilokk_parts_creation(ROHMATERIAL))  # creates the parts from raw materials
 env.process(fabric.whole_process(ROHMATERIAL))
 
 # running simulation
