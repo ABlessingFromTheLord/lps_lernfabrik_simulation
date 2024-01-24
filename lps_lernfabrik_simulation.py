@@ -1,15 +1,16 @@
 import simpy
 import random
+import numpy
 
 # simpy environment declaration
 env = simpy.Environment()
 
 # instantiate machines as simpy resources
-machine_jaespa = simpy.Resource(env, capacity=1)  # Maschine zum Saegen
-machine_gz200 = simpy.Resource(env, capacity=1)  # Machine zum Drehen
-machine_fz12 = simpy.Resource(env, capacity=1)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.Resource(env, capacity=1)  # Machine zum Montage
-machine_arbeitsplatz_2 = simpy.Resource(env, capacity=1)  # Machine zum Montage
+machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
+machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
+machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
+machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
 # global variables
 PARTS_MADE = 0
@@ -133,20 +134,11 @@ class Lernfabrik:
 
         # operating machine after equipping
         start = self.env.now
-        try:
-            self.machine_running = True
-            yield self.env.timeout(operating_time)  # running operation
-            self.machine_running = False
+        self.machine_running = True
+        yield self.env.timeout(operating_time)  # running operation
+        self.machine_running = False
 
-        except simpy.Interrupt:
-            self.currently_broken = True
-            print("machine ", machine, "broke down at ", self.env.now)
-            operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
-
-            # repairing
-            yield self.env.timeout(BROKEN_ZEIT + REPAIR_ZEIT)  # broken and repair time
-            yield self.env.timeout(operating_time)
-            self.currently_broken = False
+        # operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
@@ -234,16 +226,21 @@ class Lernfabrik:
                 elif machine == machine_arbeitsplatz:
                     return 10
 
-    def break_machine(self, machine):
+    def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while True:
             if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
                 break_or_not = random.random() > get_mz(machine)
+                break_time = 10
                 yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
                 # if true then machine breaks down, else continues running
-                if break_or_not and self.machine_running and not self.currently_broken and self.process is not None:
-                    self.process.interrupt()
+                if break_or_not and self.machine_running and self.process is not None:
+                    with machine.request(priority=priority, preempt=preempt) as request:
+                        yield request
+                        print(f"Machine {machine} broke down at {self.env.now}")
+                        yield self.env.timeout(break_time)
+                        print(f"Machine {machine} continued running at {self.env.now}")
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -253,11 +250,12 @@ class Lernfabrik:
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
-            env.process(self.break_machine(machine))  # starting breakdown function
+
+            env.process(self.break_machine(machine, 2, False))  # starting breakdown function
 
             # request = machine.request()
             # yield request  # requesting a machine for running operation
-            with machine.request() as request:
+            with machine.request(priority=1, preempt=True) as request:
                 yield request
                 # running operation
                 yield self.env.timeout(equipping_time)  # equipping a machine
