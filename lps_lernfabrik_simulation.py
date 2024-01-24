@@ -124,6 +124,7 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.machine_running = False
+        self.done_part_creation = False
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
@@ -133,21 +134,21 @@ class Lernfabrik:
         #  simulates an operation, it is an abstract function
 
         # operating machine after equipping
-        start = self.env.now
-        try:
-            self.machine_running = True
-            print(f"execution time is {operating_time} seconds")
-            yield self.env.timeout(operating_time)  # running operation
-            self.machine_running = False
-            print(f"finish time is {self.env.now} seconds")
+        while operating_time:
+            start = self.env.now
+            try:
+                self.machine_running = True
+                print(f"execution time is {operating_time} seconds, started execution at {self.env.now}")
+                yield self.env.timeout(operating_time)  # running operation
+                self.machine_running = False
+                operating_time = 0
+                print(f"finish time is {self.env.now} seconds")
 
-        except simpy.Interrupt:
-            print(f"Machine{machine} got PREEMPTED at {self.env.now}")
-            operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
-            print(f"remaining time for operation {operating_time} seconds")
-            if operating_time is None:
-                print("operating time is none")
-            yield self.env.timeout(operating_time)
+            except simpy.Interrupt:
+                print(f"Machine{machine} got PREEMPTED at {self.env.now}")  # TODO: comment out after proving
+                operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
+                yield self.env.timeout(50)  # TODO: adjust for real repair time
+                print(f"remaining time for operation {operating_time} seconds, continues at {self.env.now}")
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
@@ -237,29 +238,28 @@ class Lernfabrik:
 
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while True:
-            if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
-                break_or_not = random.random() > get_mz(machine)
-                break_time = 10*60
-                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+        while not self.done_part_creation:
+            while True:
+                if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
+                    break_or_not = random.random() > get_mz(machine)
+                    yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
-                # if true then machine breaks down, else continues running
-                if break_or_not and self.machine_running and self.process is not None and not self.currently_broken:
-                    with machine.request(priority=priority, preempt=preempt) as request:
-                        assert isinstance(self.env.now, int), type(self.env.now)
-                        yield request
+                    # if true then machine breaks down, else continues running
+                    if break_or_not and self.machine_running and self.process is not None and not self.currently_broken:
+                        with machine.request(priority=priority, preempt=preempt) as request:
+                            assert isinstance(self.env.now, int), type(self.env.now)
+                            yield request
 
-                        self.currently_broken = True
+                            self.currently_broken = True
 
-                        assert isinstance(self.env.now, int), type(self.env.now)
+                            assert isinstance(self.env.now, int), type(self.env.now)
 
-                        if self.process is not None:
-                            self.process.interrupt()
-                            print(f"Machine {machine} broke down at {self.env.now}")
-                            yield self.env.timeout(break_time)
-                            print(f"Machine {machine} continued running at {self.env.now}")
-
-                        self.currently_broken = False
+                            if self.process is not None:
+                                # print(f"Machine {machine} broke down at {self.env.now}")
+                                self.process.interrupt()
+                                # yield self.env.timeout(50)
+                                # print(f"Machine {machine} continued running at {self.env.now}")
+                            self.currently_broken = False
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -279,7 +279,6 @@ class Lernfabrik:
                 self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
                 yield self.process
 
-                yield self.env.timeout(60)  # buffer for current process to finish so to avoid errors
                 self.process = None
 
             if machine == machine_gz200:
@@ -308,6 +307,7 @@ class Lernfabrik:
         # simulates the assembling of the Unilokk parts into Unilokk
         yield self.env.process(self.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
         print("Done creating parts")
+        self.done_part_creation = True
         i = 1
 
         # then assemble them into Unilokk
