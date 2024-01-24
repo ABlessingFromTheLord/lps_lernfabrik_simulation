@@ -22,7 +22,7 @@ GZ_200_MZ = 0.85
 FZ12_MZ = 0  # TODO: get value
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
-MTTR = 120  # TODO: setting it to one minute causes terminated processes to be interrupted
+MTTR = 60  # TODO: setting it to one minute causes terminated processes to be interrupted
 
 # machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
@@ -134,11 +134,20 @@ class Lernfabrik:
 
         # operating machine after equipping
         start = self.env.now
-        self.machine_running = True
-        yield self.env.timeout(operating_time)  # running operation
-        self.machine_running = False
+        try:
+            self.machine_running = True
+            print(f"execution time is {operating_time} seconds")
+            yield self.env.timeout(operating_time)  # running operation
+            self.machine_running = False
+            print(f"finish time is {self.env.now} seconds")
 
-        # operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
+        except simpy.Interrupt:
+            print(f"Machine{machine} got PREEMPTED at {self.env.now}")
+            operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
+            print(f"remaining time for operation {operating_time} seconds")
+            if operating_time is None:
+                print("operating time is none")
+            yield self.env.timeout(operating_time)
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
@@ -231,16 +240,26 @@ class Lernfabrik:
         while True:
             if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
                 break_or_not = random.random() > get_mz(machine)
-                break_time = 10
+                break_time = 10*60
                 yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
                 # if true then machine breaks down, else continues running
-                if break_or_not and self.machine_running and self.process is not None:
+                if break_or_not and self.machine_running and self.process is not None and not self.currently_broken:
                     with machine.request(priority=priority, preempt=preempt) as request:
+                        assert isinstance(self.env.now, int), type(self.env.now)
                         yield request
-                        print(f"Machine {machine} broke down at {self.env.now}")
-                        yield self.env.timeout(break_time)
-                        print(f"Machine {machine} continued running at {self.env.now}")
+
+                        self.currently_broken = True
+
+                        assert isinstance(self.env.now, int), type(self.env.now)
+
+                        if self.process is not None:
+                            self.process.interrupt()
+                            print(f"Machine {machine} broke down at {self.env.now}")
+                            yield self.env.timeout(break_time)
+                            print(f"Machine {machine} continued running at {self.env.now}")
+
+                        self.currently_broken = False
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
@@ -251,19 +270,17 @@ class Lernfabrik:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
 
-            env.process(self.break_machine(machine, 2, False))  # starting breakdown function
+            env.process(self.break_machine(machine, 2, True))  # starting breakdown function
 
-            # request = machine.request()
-            # yield request  # requesting a machine for running operation
-            with machine.request(priority=1, preempt=True) as request:
+            with machine.request(priority=1, preempt=False) as request:
                 yield request
                 # running operation
                 yield self.env.timeout(equipping_time)  # equipping a machine
                 self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
                 yield self.process
-                self.process = None
 
-            # machine.release(request)  # releasing resource for other operations
+                yield self.env.timeout(60)  # buffer for current process to finish so to avoid errors
+                self.process = None
 
             if machine == machine_gz200:
                 self.previously_created = part_name  # setting the control for get_ruestung_zeit function
@@ -296,7 +313,6 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                print("arrives in if")
                 self.process = self.env.process(self.operation(machine_arbeitsplatz_2, 180))
                 yield self.process  # assembling parts to create Unilokk
 
