@@ -350,8 +350,6 @@ fabric = Lernfabrik(env)
 env.process(fabric.unilokk_parts_creation(ROHMATERIAL))  # creates the parts from raw materials
 env.process(fabric.whole_process(ROHMATERIAL))
 
-# running simulation
-
 env.run(until=86400)
 
 # analysis and results
