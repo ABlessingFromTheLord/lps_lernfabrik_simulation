@@ -142,11 +142,15 @@ class Lernfabrik:
                 operating_time = 0
                 print(f"finish time is {self.env.now} seconds")
 
-            except simpy.Interrupt:
+            except simpy.Interrupt as interrupt:
+                self.currently_broken = True
+
                 print(f"Machine{machine} got PREEMPTED at {self.env.now}")  # TODO: comment out after proving
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
-                yield self.env.timeout(50)  # TODO: adjust for real repair time
+                yield self.env.timeout(5 * 60)  # TODO: adjust for real repair time
                 print(f"remaining time for operation {operating_time} seconds, continues at {self.env.now}")
+
+                self.currently_broken = False
 
     # Helper functions
     def get_ruestung_zeit(self, machine):
@@ -242,20 +246,17 @@ class Lernfabrik:
                 yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
                 # if true then machine breaks down, else continues running
-                if break_or_not and not self.currently_broken:
+                if break_or_not:
                     with machine.request(priority=priority, preempt=preempt) as request:
                         assert isinstance(self.env.now, int), type(self.env.now)
                         yield request
 
-                        self.currently_broken = True
-
                         assert isinstance(self.env.now, int), type(self.env.now)
-                        if self.process is not None:
+                        if self.process is not None and not self.currently_broken:
                             # print(f"Machine {machine} broke down at {self.env.now}")
                             self.process.interrupt()
                             # yield self.env.timeout(50)
                             # print(f"Machine {machine} continued running at {self.env.now}")
-                        self.currently_broken = False
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
