@@ -1,3 +1,4 @@
+import math
 import simpy
 import numpy
 
@@ -68,24 +69,21 @@ def get_machines_for_part(part_name):
             return RING_MACHINES
 
 
-def increase_part_count(part_name):
-    #  increase the respective part count after the machines for part
-    #  creation have been successfully executed
-    #  for a 3000mm Stange, 17 oberteil, 11 unterteil, 48 halteteil and 97
-    #  Rings are created and hence they are incremented by these values
+def increase_part_count(part_name, output):
+    #  increase the respective part count after the machines for part by amount "output"
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
-            OBERTEIL_COUNT = OBERTEIL_COUNT + 17
+            OBERTEIL_COUNT += output
         case "Unterteil":
             global UNTERTEIL_COUNT
-            UNTERTEIL_COUNT = UNTERTEIL_COUNT + 11
+            UNTERTEIL_COUNT += output
         case "Halteteil":
             global HALTETEIL_COUNT
-            HALTETEIL_COUNT = HALTETEIL_COUNT + 49
+            HALTETEIL_COUNT += output
         case "Ring":
             global RING_COUNT
-            RING_COUNT = RING_COUNT + 97
+            RING_COUNT += output
 
 
 def decrease_part_count(part_name):
@@ -118,6 +116,35 @@ def get_mz(machine):
     else:
         return 1
     # TODO: FZ12 left, also the MZ in Ring production to be checked
+
+
+def get_quality_grade(machine):
+    # returns the quality grade of parts created by certain machine
+    # i.e if quality grade is 98%, it means 98% of material produced are usable to the next stage
+    # 2% are thrown away
+    if machine == machine_jaespa:
+        return 1
+    elif machine == machine_gz200:
+        return 0.98
+    elif machine == machine_fz12:
+        return 0.95
+    elif machine == machine_arbeitsplatz_2:
+        return 0.85
+    else:
+        return 1
+
+
+def get_output_per_part(part_name):
+    # returns amount of parts created from a 3000mm long rod of raw material
+    match part_name:
+        case "Oberteil":
+            return 17
+        case "Unterteil":
+            return 11
+        case "Halteteil":
+            return 49
+        case "Ring":
+            return 97
 
 
 class Lernfabrik:
@@ -260,6 +287,7 @@ class Lernfabrik:
         #  runs consequent operations to create Unilokk part
         self.next_creating = part_name
         required_machines = get_machines_for_part(part_name)
+        output = get_output_per_part(part_name)  # expected yield of this part from raw material
 
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
@@ -273,17 +301,19 @@ class Lernfabrik:
                 env.process(self.break_machine(machine, 2, True))  # starting breakdown function
                 yield self.process
 
-                # self.process = None
+                self.process = None
 
             if machine == machine_gz200:
                 self.previously_created = part_name  # setting the control for get_ruestung_zeit function
                 if part_name == "Ring":
                     self.done_once = not self.done_once  # setting control for get_operating_time function
 
+            output *= get_quality_grade(machine)
+
         #  all machines required to produce a part have been operated
         # part is created
-        increase_part_count(part_name)  # add newly created part
-        print(part_name, "was created at ", self.env.now)
+        increase_part_count(part_name, math.floor(output))  # add newly created part
+        print(math.floor(output), part_name, "(s) was created at ", self.env.now)
 
     def unilokk_parts_creation(self, raw_material):
         #  simulates the creation of Unilokk unit
