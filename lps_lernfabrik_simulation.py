@@ -113,6 +113,8 @@ def get_mz(machine):
         return 0.85
     elif machine == machine_fz12:
         return 0.98
+    elif machine == machine_arbeitsplatz or machine == machine_arbeitsplatz_2:
+        return 1
     else:
         return 1
     # TODO: FZ12 left, also the MZ in Ring production to be checked
@@ -241,19 +243,18 @@ class Lernfabrik:
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while True:
-            if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
-                break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
-                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+            break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
+            yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
-                # if true then machine breaks down, else continues running
-                if break_or_not:
-                    with machine.request(priority=priority, preempt=preempt) as request:
-                        assert isinstance(self.env.now, int), type(self.env.now)
-                        yield request
-                        assert isinstance(self.env.now, int), type(self.env.now)
+            # if true then machine breaks down, else continues running
+            if break_or_not:
+                with machine.request(priority=priority, preempt=preempt) as request:
+                    assert isinstance(self.env.now, int), type(self.env.now)
+                    yield request
+                    assert isinstance(self.env.now, int), type(self.env.now)
 
-                        if self.process is not None and not self.currently_broken:
-                            self.process.interrupt()
+                    if self.process is not None and not self.currently_broken:
+                        self.process.interrupt()
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
