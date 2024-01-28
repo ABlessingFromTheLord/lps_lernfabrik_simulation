@@ -298,6 +298,9 @@ class Lernfabrik:
             ROHMATERIAL = ROHMATERIAL - 1
 
     def whole_process(self, raw_material):
+        # simulates the assembling of the Unilokk parts into Unilokk
+        yield env.process(fabric.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
+
         i = 1
 
         # then assemble them into Unilokk
@@ -344,8 +347,6 @@ def serve_orders_algorithm():
 
 # instantiate object of Lernfabrik class
 fabric = Lernfabrik(env)
-# simulates the assembling of the Unilokk parts into Unilokk
-env.process(fabric.unilokk_parts_creation(ROHMATERIAL))  # creates the parts from raw materials
 env.process(fabric.whole_process(ROHMATERIAL))
 
 env.run(until=86400)
