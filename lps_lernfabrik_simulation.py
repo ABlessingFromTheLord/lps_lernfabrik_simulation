@@ -176,7 +176,11 @@ class Lernfabrik:
 
                 print(f"Machine{machine} got PREEMPTED at {self.env.now}")  # TODO: comment out after proving
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
-                yield self.env.timeout(5 * 60)  # TODO: adjust for real repair time
+
+                # producing random repair time in the gaussian distribution with mean 60 seconds and standard
+                # deviation of 30 seconds
+                repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
+                yield self.env.timeout(repair_time)
                 print(f"remaining time for operation {operating_time} seconds, continues at {self.env.now}")
 
                 self.currently_broken = False
@@ -332,7 +336,6 @@ class Lernfabrik:
         yield env.process(fabric.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
 
         i = 1
-
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
@@ -376,10 +379,11 @@ def serve_orders_algorithm():
 
 
 # instantiate object of Lernfabrik class
+SIM_TIME = 86400
 fabric = Lernfabrik(env)
 env.process(fabric.whole_process(ROHMATERIAL))
 
-env.run(until=86400)
+env.run(until=SIM_TIME)
 
 # analysis and results
 print("OBERTEIL: ", OBERTEIL_COUNT)
