@@ -1,5 +1,4 @@
 import simpy
-import random
 import numpy
 
 # simpy environment declaration
@@ -112,8 +111,10 @@ def get_mz(machine):
         return 0.98
     elif machine == machine_gz200:
         return 0.85
+    elif machine == machine_fz12:
+        return 0.98
     else:
-        return 0
+        return 1
     # TODO: FZ12 left, also the MZ in Ring production to be checked
 
 
@@ -123,7 +124,6 @@ class Lernfabrik:
         self.process = None
         self.env = sim_env  # environment variable
         self.currently_broken = False  # boolean for denoting when a machine is broken
-        self.done_part_creation = False
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
@@ -242,7 +242,7 @@ class Lernfabrik:
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while True:
             if machine != machine_arbeitsplatz or machine != machine_arbeitsplatz_2:
-                break_or_not = random.random() > get_mz(machine)
+                break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
                 yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
                 # if true then machine breaks down, else continues running
@@ -250,13 +250,10 @@ class Lernfabrik:
                     with machine.request(priority=priority, preempt=preempt) as request:
                         assert isinstance(self.env.now, int), type(self.env.now)
                         yield request
-
                         assert isinstance(self.env.now, int), type(self.env.now)
+
                         if self.process is not None and not self.currently_broken:
-                            # print(f"Machine {machine} broke down at {self.env.now}")
                             self.process.interrupt()
-                            # yield self.env.timeout(50)
-                            # print(f"Machine {machine} continued running at {self.env.now}")
 
     def part_creation(self, part_name):
         #  runs consequent operations to create Unilokk part
