@@ -1,6 +1,10 @@
 import math
+
+import self
 import simpy
 import numpy
+from typing import List
+from random import choices
 
 # simpy environment declaration
 env = simpy.Environment()
@@ -372,10 +376,20 @@ def get_unilokk_parts(orders):
     return parts
 
 
-def serve_orders_algorithm():
+class GeneticAlgorithmOptimization:
     # order fulfillment algorithm
     # empty for now
-    return 0
+    def __init__(self):
+        self.Genome = List[int]
+
+    def generate_genome(self, length: int) -> self.Genome:
+        return choices([0, 1], k=length)
+
+
+    def generate_population(self, size: int, genome_length: int) -> Pop:
+
+
+
 
 
 # instantiate object of Lernfabrik class
