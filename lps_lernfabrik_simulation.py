@@ -376,22 +376,6 @@ def get_unilokk_parts(orders):
     return parts
 
 
-class GeneticAlgorithmOptimization:
-    # order fulfillment algorithm
-    # empty for now
-    def __init__(self):
-        self.Genome = List[int]
-
-    def generate_genome(self, length: int) -> self.Genome:
-        return choices([0, 1], k=length)
-
-
-    def generate_population(self, size: int, genome_length: int) -> Pop:
-
-
-
-
-
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
