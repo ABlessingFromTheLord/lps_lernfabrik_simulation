@@ -151,6 +151,35 @@ def get_output_per_part(part_name):
             return 97
 
 
+def get_unilokk_parts_needed(orders):
+    # received orders as parameter and returns the total number of
+    # parts needed for the entire order
+    # these parts are saved in an array that is returned
+    # index 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
+    parts = [0, 0, 0, 0]
+    temp = 0
+
+    for order in orders:
+        temp += order
+
+    for i in range(len(parts)):
+        parts[i] += temp
+
+    return parts
+
+
+def can_be_fulfilled(orders, raw_materials):
+    # returns how many of the orders can be fulfilled based on available raw materials
+    # raw_materials is a list, ie index 0 is the 16mm rods for oberteil, unterteil and ring
+    # index 1 is the 26mm used for the halteteil
+    # both rods are assumed to be each 300cm long
+
+    parts_needed = get_unilokk_parts_needed(orders)
+
+    halteteil = math.floor((raw_materials[1] * 300 * 48) / 90)
+    # TODO: function is incomplete
+
+
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env):
@@ -363,23 +392,12 @@ class Lernfabrik:
                 break
 
 
-def get_unilokk_parts(orders):
-    # received orders as parameter and returns the total number of
-    # parts needed for the entire order
-    # these parts are saved in an array that is returned
-    # index 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
-    parts = [0, 0, 0, 0]
-
-    for order in orders:
-        for part in parts:
-            part += order
-    return parts
-
-
+print(get_unilokk_parts_needed([1, 2, 4, 2, 3, 1]))
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
 env.process(fabric.whole_process(ROHMATERIAL))
+
 
 env.run(until=SIM_TIME)
 
