@@ -70,7 +70,7 @@ RUESTUNGS_ZEIT = 0
 UNILOKK_COUNT = 0
 
 # raw materials
-ROHMATERIAL = 1.0 * 360  # raw material, k * m, k = amount, m = length of rod in cm
+ROHMATERIAL = 1.0 * 450.0  # raw material, k * m, k = amount, m = length of rod in cm
 
 
 # global helper functions
@@ -150,6 +150,10 @@ def get_quality_grade(machine):
         return 0.85
     else:
         return 1
+
+
+def orders_fulfilled(orders, unilokk):
+    return (unilokk / orders) * 100
 
 
 def get_output_per_part(part_name):
@@ -523,11 +527,12 @@ env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
 env.run(until=SIM_TIME)
 
 # analysis and results
-print("OBERTEIL: ", OBERTEIL_COUNT)
+print("\nOBERTEIL: ", OBERTEIL_COUNT)
 print("UNTERTEIL: ", UNTERTEIL_COUNT)
 print("HALTETEIL: ", HALTETEIL_COUNT)
-print("RING: ", RING_COUNT)
+print("RING: ", RING_COUNT, "\n")
 
-print("created: ", UNILOKK_COUNT, " Unilokk")
+print("produced: ", UNILOKK_COUNT, " Unilokk")
+print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
 print("remaining raw materials: ", ROHMATERIAL)
 print("total ruestungszeit: ", RUESTUNGS_ZEIT)
