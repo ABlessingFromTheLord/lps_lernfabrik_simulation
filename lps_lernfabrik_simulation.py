@@ -1,10 +1,13 @@
 import math
-
-import self
 import simpy
 import numpy
-from typing import List
-from random import choices
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.optimize import minimize
+import numpy as np
+# disabling redundant warning
+from pymoo.config import Config
+Config.warnings['not_compiled'] = False
 
 # simpy environment declaration
 env = simpy.Environment()
@@ -43,20 +46,31 @@ RING = "Ring"
 # Unilokk definition
 UNILOKK = [OBERTEIL, UNTERTEIL, HALTETEIL, RING]
 
+# optimization parameters
+OBERTEIL_PRODUCTION = 17
+UNTERTEIL_PRODUCTION = 11
+HALTETEIL_PRODUCTION = 49
+RING_PRODUCTION = 97
+
+OBERTEIL_ORDER = 0
+UNTERTEIL_ORDER = 0
+HALTETEIL_ORDER = 0
+RING_ORDER = 0
+
 # parts produced
 OBERTEIL_COUNT = 0
 UNTERTEIL_COUNT = 0
 HALTETEIL_COUNT = 0
 RING_COUNT = 0
 
+# ruestungszeit
+RUESTUNGS_ZEIT = 0
+
 # unilokk created
 UNILOKK_COUNT = 0
 
-# rohmaterial
-ROHMATERIAL = 1  # single 3000mm long rod
-
-# orders
-ORDERS = []
+# raw materials
+ROHMATERIAL = 1.0 * 360  # raw material, k * m, k = amount, m = length of rod in cm
 
 
 # global helper functions
@@ -151,35 +165,137 @@ def get_output_per_part(part_name):
             return 97
 
 
-def get_unilokk_parts_needed(orders):
-    # received orders as parameter and returns the total number of
-    # parts needed for the entire order
-    # these parts are saved in an array that is returned
-    # index 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
-    parts = [0, 0, 0, 0]
-    temp = 0
+def get_parts_by_sequence(sequence):
+    # returns part names in the amount their machines are needed to be executed
+    # to get a batch that can fulfill an order
+    to_return = []
+
+    for i in range(len(sequence)):
+        match i:
+            case 0:
+                while sequence[i] > 0:
+                    to_return.append("Oberteil")
+                    sequence[i] -= 1
+            case 1:
+                while sequence[i] > 0:
+                    to_return.append("Unterteil")
+                    sequence[i] -= 1
+            case 2:
+                while sequence[i] > 0:
+                    to_return.append("Halteteil")
+                    sequence[i] -= 1
+            case 3:
+                while sequence[i] > 0:
+                    to_return.append("Ring")
+                    sequence[i] -= 1
+    return to_return
+
+
+def submit_order(orders):
+    # receives orders and sets the universal variables OBERTEIL_ORDER,
+    # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
+    total_parts = 0
 
     for order in orders:
-        temp += order
+        total_parts += order
 
-    for i in range(len(parts)):
-        parts[i] += temp
-
-    return parts
-
-
-def can_be_fulfilled(orders, raw_materials):
-    # returns how many of the orders can be fulfilled based on available raw materials
-    # raw_materials is a list, ie index 0 is the 16mm rods for oberteil, unterteil and ring
-    # index 1 is the 26mm used for the halteteil
-    # both rods are assumed to be each 300cm long
-
-    parts_needed = get_unilokk_parts_needed(orders)
-
-    halteteil = math.floor((raw_materials[1] * 300 * 48) / 90)
-    # TODO: function is incomplete
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = total_parts
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = total_parts
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = total_parts
+    global RING_ORDER
+    RING_ORDER = total_parts
 
 
+def adjust(genes):
+    # if the machine capacity greater than order, genes are always zero
+    # this method adjusts that to make sure if that's the case, then the
+    # machine is run at least once
+    # other use case of the method is to round up
+    copy = []
+    for i in range(len(genes)):
+        if 0 < genes[i] < 1:
+            genes[i] = 1
+            copy.append(int(genes[i]))
+        else:
+            genes[i] = math.ceil(genes[i])
+            copy.append(int(genes[i]))
+    return copy
+
+
+# optimization
+# submit order
+
+# submit order and run algorithm
+submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
+
+
+# optimization problem definition
+class ExecutionAmounts(Problem):
+    def __init__(self):
+        super().__init__(n_var=4, n_obj=1, n_constr=0, xl=np.array([0, 0, 0, 0]),
+                         xu=np.array([OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]))
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        total_oberteil = np.zeros(len(x))
+        total_unterteil = np.zeros(len(x))
+        total_halteteil = np.zeros(len(x))
+        total_ring = np.zeros(len(x))
+
+        for i in range(len(x)):
+            if OBERTEIL_COUNT == 0 and x[i, 0] == 0:
+                total_oberteil[i] = 1
+            elif x[i, 0] > 0:
+                total_oberteil[i] = OBERTEIL_PRODUCTION * x[i, 0]
+
+            if UNTERTEIL_COUNT == 0 and x[i, 1] == 0:
+                total_oberteil[i] = 1
+            elif x[i, 1] > 0:
+                total_unterteil[i] = UNTERTEIL_PRODUCTION * x[i, 1]
+
+            if HALTETEIL_COUNT == 0 and x[i, 2] == 0:
+                total_halteteil[i] = 1
+            elif x[i, 2] > 0:
+                total_halteteil[i] = HALTETEIL_PRODUCTION * x[i, 2]
+
+            if RING_COUNT == 0 and x[i, 3] == 0:
+                total_ring[i] = 1
+            elif x[i, 3] > 0:
+                total_ring[i] = RING_PRODUCTION * x[i, 3]
+
+        fitness = (np.abs(total_oberteil - OBERTEIL_ORDER) + np.abs(total_unterteil - UNTERTEIL_ORDER) +
+                   np.abs(total_halteteil - HALTETEIL_ORDER) + np.abs(total_ring - RING_ORDER))
+
+        out["F"] = fitness[:, None]  # Reshape to match the expected shape
+        out["G"] = np.zeros((len(x), 0))  # No constraints for now
+
+
+# instantiating problem and algorithm
+problem = ExecutionAmounts()
+algorithm = NSGA2(
+    pop_size=100,
+    n_offsprings=50,
+    eliminate_duplicates=True
+)
+
+# executing the optimization algorithm
+# returns the sequence to execute machines to fulfill current order
+res = minimize(problem,
+               algorithm,
+               ('n_gen', 100),
+               seed=1,
+               verbose=False)
+
+# result for execution sequence
+EXECUTION_SEQUENCE = adjust(res.X)
+EXECUTION_SEQUENCE_IN_PARTS = get_parts_by_sequence(EXECUTION_SEQUENCE)
+
+print("Best solution found: %s" % EXECUTION_SEQUENCE_IN_PARTS)
+
+
+# simulation class
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
     def __init__(self, sim_env):
@@ -329,6 +445,8 @@ class Lernfabrik:
         for machine in required_machines:
             equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
             operating_time = self.get_operating_time(machine, part_name)  # getting operation time
+            global RUESTUNGS_ZEIT
+            RUESTUNGS_ZEIT += equipping_time
 
             with machine.request(priority=1, preempt=False) as request:
                 yield request
@@ -352,21 +470,25 @@ class Lernfabrik:
         increase_part_count(part_name, math.floor(output))  # add newly created part
         print(math.floor(output), part_name, "(s) was created at ", self.env.now)
 
-    def unilokk_parts_creation(self, raw_material):
+    def unilokk_parts_creation_for_order(self, sequence):
         #  simulates the creation of Unilokk unit
 
-        while raw_material > 0:
+        global ROHMATERIAL
+        while ROHMATERIAL >= 90.0:
             #  basic parts creation
-            for part in UNILOKK:
+            for part in sequence:
                 yield self.env.process(self.part_creation(part))  # process to create a part
-            raw_material = raw_material - 1
+                print("before: ", ROHMATERIAL, " at", self.env.now)
+                ROHMATERIAL -= 90.0  # reducing the raw materials for the part we just created
+                print("after: ", ROHMATERIAL, " at", self.env.now)
 
-            global ROHMATERIAL
-            ROHMATERIAL = ROHMATERIAL - 1
-
-    def whole_process(self, raw_material):
+    def whole_process(self, execution_sequence):
         # simulates the assembling of the Unilokk parts into Unilokk
-        yield env.process(fabric.unilokk_parts_creation(raw_material))  # creates the parts from raw materials
+        # each raw material is assumed to be a 300cm long rod, so 3 means 3 300cm rods
+        # execution sequence is the sequence of part creations necessary for creating
+        # parts that will fulfill orders, determined by the optimization algorithm above
+        yield env.process(fabric.unilokk_parts_creation_for_order(
+            execution_sequence))  # creates the parts from raw materials
 
         i = 1
         # then assemble them into Unilokk
@@ -392,11 +514,10 @@ class Lernfabrik:
                 break
 
 
-print(get_unilokk_parts_needed([1, 2, 4, 2, 3, 1]))
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-env.process(fabric.whole_process(ROHMATERIAL))
+env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
 
 
 env.run(until=SIM_TIME)
@@ -409,3 +530,4 @@ print("RING: ", RING_COUNT)
 
 print("created: ", UNILOKK_COUNT, " Unilokk")
 print("remaining raw materials: ", ROHMATERIAL)
+print("total ruestungszeit: ", RUESTUNGS_ZEIT)

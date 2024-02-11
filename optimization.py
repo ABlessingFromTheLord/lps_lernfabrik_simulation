@@ -1,9 +1,12 @@
 import math
-
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
 import numpy as np
+# disabling redundant warning
+from pymoo.config import Config
+
+Config.warnings['not_compiled'] = False
 
 # Define constants
 OBERTEIL_PRODUCTION = 17
@@ -87,9 +90,28 @@ def adjust(genes):
     return copy
 
 
-order = 60
+def submit_order(orders):
+    # receives orders and sets the universal variables OBERTEIL_ORDER,
+    # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
+    total_parts = 0
 
-set_test_values(order, order, order, order, 0, 0, 0, 0)
+    for order in orders:
+        total_parts += order
+
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = total_parts
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = total_parts
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = total_parts
+    global RING_ORDER
+    RING_ORDER = total_parts
+
+
+# order = 60
+
+# set_test_values(order, order, order, order, 0, 0, 0, 0)
+submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
 
 
 class JobShopScheduling(Problem):
@@ -143,8 +165,9 @@ res = minimize(problem,
                algorithm,
                ('n_gen', 100),
                seed=1,
-               verbose=True)
+               verbose=False)
 
+# res = run_algo()
 res.X = adjust(res.X)
 
 print("Best solution found: %s" % res.X)
