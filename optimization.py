@@ -1,3 +1,5 @@
+import math
+
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
@@ -69,7 +71,23 @@ def set_test_values(oberteil_order, unterteil_order, halteteil_order, ring_order
         RING_ORDER -= RING_COUNT  # get the amount needed
 
 
-order = 17
+def adjust(genes):
+    # if the machine capacity greater than order, genes are always zero
+    # this method adjusts that to make sure if that's the case, then the
+    # machine is run at least once
+    # other use case of the method is to round up
+    copy = []
+    for i in range(len(genes)):
+        if 0 < genes[i] < 1:
+            genes[i] = 1
+            copy.append(int(genes[i]))
+        else:
+            genes[i] = math.ceil(genes[i])
+            copy.append(int(genes[i]))
+    return copy
+
+
+order = 60
 
 set_test_values(order, order, order, order, 0, 0, 0, 0)
 
@@ -127,8 +145,10 @@ res = minimize(problem,
                seed=1,
                verbose=True)
 
+res.X = adjust(res.X)
+
 print("Best solution found: %s" % res.X)
-print(round(res.X[0]))
-print(round(res.X[1]))
-print(round(res.X[2]))
-print(round(res.X[3]))
+print(res.X[0])
+print(res.X[1])
+print(res.X[2])
+print(res.X[3])
