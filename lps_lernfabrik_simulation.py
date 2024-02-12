@@ -548,10 +548,15 @@ class Lernfabrik:
             self.done_once = not self.done_once  # setting control for get_operating_time function
 
         job.set_completed(not job.get_completed())  # flipping completed boolean since we have done job
-        expected_output = input_amount * get_quality_grade(required_machine)
-        return expected_output
 
-    def finishing_unilokk_creation(self):
+        # creating cumulative mz
+        job.set_cumulative_mz(get_mz(required_machine))
+        print("cumulative_mz ", job.get_cumulative_mz())
+
+        if job.job_before is not None and job.job_before.get_completed():
+            job.set_cumulative_mz(job.get_cumulative_mz() * job.job_before.get_cumulative_mz())
+
+    def finish_unilokk_creation(self):
         # simulates the Kleben, Montage, Pruefen and Verpacken processes
         # after parts have been created
         print("\nFinishing process has started")
@@ -578,9 +583,10 @@ class Lernfabrik:
             else:
                 break
 
-    def part_creation_2(self, sequence):
-        # runs jobs necessary to create Unilokk part
-        # it is a sequence of job executions
+    def fulfill_orders(self, sequence):
+        # the whole process from part creation to order fulfillment
+
+        # parts creation
         jobs = []  # array of jobs
 
         for part in sequence:
@@ -602,17 +608,18 @@ class Lernfabrik:
             if all_jobs_completed_for_part(part_name):
                 #  all machines required to produce a part have been operated
                 # part is created
+                this_amount *= job.get_cumulative_mz()
                 increase_part_count(part_name, math.floor(this_amount))  # add newly created part
                 print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
         # assembling parts
-        yield self.env.process(self.finishing_unilokk_creation())
+        yield self.env.process(self.finish_unilokk_creation())
 
 
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-env.process(fabric.part_creation_2(EXECUTION_SEQUENCE_IN_PARTS))
+env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
 # env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
 
 env.run(until=SIM_TIME)
@@ -625,5 +632,4 @@ print("RING: ", RING_COUNT, "\n")
 
 print("produced: ", UNILOKK_COUNT, " Unilokk")
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
-print("unilokk remaining: ", UNILOKK_COUNT - OBERTEIL_ORDER)
 print("total ruestungszeit: ", RUESTUNGS_ZEIT)

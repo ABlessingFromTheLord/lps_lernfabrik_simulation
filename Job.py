@@ -11,6 +11,7 @@ class Job:
         self.job_after = Job
         self.machine_required = machine
         self.completed = False
+        self.cumulative_mz = None
 
     # getters
     def get_name(self):
@@ -34,6 +35,9 @@ class Job:
     def get_completed(self):
         return self.completed
 
+    def get_cumulative_mz(self):
+        return self.cumulative_mz
+
     # setters
     def set_job_before(self, job):
         self.job_before = job
@@ -43,5 +47,8 @@ class Job:
 
     def set_completed(self, boolean):
         self.completed = boolean
+
+    def set_cumulative_mz(self, value):
+        self.cumulative_mz = value
 
 
