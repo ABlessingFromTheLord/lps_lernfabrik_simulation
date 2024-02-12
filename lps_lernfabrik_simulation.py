@@ -41,20 +41,20 @@ RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz
 
 # instantiating jobs
 # Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", 34)
-Oberteil_Drehen = Job("Oberteil_Drehen", 287)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", 376)
+Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
+Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
+Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
 Oberteil_Drehen.set_job_before(Oberteil_Saegen)
 Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
 Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
 Oberteil_Fraesen.set_job_after(None)
-Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Saegen, Oberteil_Fraesen]
+Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", 20)
-Unterteil_Drehen = Job("Unterteil_Drehen", 247)
+Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
+Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
 Unterteil_Drehen.set_job_before(Unterteil_Drehen)
@@ -62,8 +62,8 @@ Unterteil_Drehen.set_job_after(None)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", 4)
-Halteteil_Drehen = Job("Halteteil_Drehen", 255)
+Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil",  255, machine_gz200)
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
 Halteteil_Drehen.set_job_before(Halteteil_Saegen)
@@ -71,10 +71,10 @@ Halteteil_Drehen.set_job_after(None)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", 3)
-Ring_Drehen = Job("Ring_Drehen", 185)
-Ring_Senken_1 = Job("Ring_Senken_1", 10)
-Ring_Senken_2 = Job("Ring_Senken_2", 10)
+Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
+Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
+Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
+Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Drehen.set_job_before(Ring_Saegen)
@@ -86,7 +86,9 @@ Ring_Senken_2.set_job_after(None)
 Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
 
 # Finishing jobs
-Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", 180)
+Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+Fertigstellung.set_job_before(None)
+Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
 # part names / working strings
@@ -134,6 +136,19 @@ def get_machines_for_part(part_name):
             return HALTETEIL_MACHINES
         case "Ring":
             return RING_MACHINES
+
+
+def get_jobs_for_part(part_name):
+    #  returns the jobs required to be done to create a certain part of Unilokk
+    match part_name:
+        case "Oberteil":
+            return Oberteil_Jobs
+        case "Unterteil":
+            return Unterteil_Jobs
+        case "Halteteil":
+            return Halteteil_Jobs
+        case "Ring":
+            return Ring_Jobs
 
 
 def increase_part_count(part_name, output):
@@ -216,6 +231,20 @@ def get_output_per_part(part_name):
             return 49
         case "Ring":
             return 97
+
+
+def all_jobs_completed_for_part(part_name):
+    # checks if the jobs necessary to complete  a certain part creation are done
+    # when all jobs required for a certain part creation are done it returns true
+    # resets all the booleans completed in jobs for the next round of part creation
+    # if there are more of the same part to be created
+    jobs_required = get_jobs_for_part(part_name)
+
+    for job in jobs_required:
+        if not job.get_completed():
+            return False
+        job.set_completed(not job.get_completed())  # resetting for next round of part creation
+    return True
 
 
 def get_parts_by_sequence(sequence):
@@ -523,6 +552,64 @@ class Lernfabrik:
         increase_part_count(part_name, math.floor(output))  # add newly created part
         print(math.floor(output), part_name, "(s) was created at ", self.env.now)
 
+    def do_job(self, job, part_name, input_amount):
+        print("gets here")
+        # performs a certain job as subprocess in part creation process
+        # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
+        self.next_creating = part_name
+
+        # TODO: output per part is not yet defined
+        required_machine = job.get_machine_required()
+        equipping_time = self.get_ruestung_zeit(required_machine)
+        operating_time = job.get_duration()
+        global RUESTUNGS_ZEIT
+        RUESTUNGS_ZEIT += 1  # collect Ruestungszeit for statistical purposes
+
+        with required_machine.request(priority=1, preempt=False) as request:
+            yield request
+            yield self.env.timeout(equipping_time)
+            self.process = self.env.process(self.operation(required_machine, operating_time))  # operating machinery
+            env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
+            yield self.process
+
+            self.process = None
+
+        if required_machine == machine_gz200:
+            self.previously_created = part_name  # setting the control for get_ruestung_zeit function
+        if part_name == "Ring":
+            self.done_once = not self.done_once  # setting control for get_operating_time function
+
+        job.set_completed(not job.get_completed())  # flipping completed boolean since we have done job
+        expected_output = input_amount * get_quality_grade(required_machine)
+        return expected_output
+
+    def part_creation_2(self, sequence):
+        # runs jobs necessary to create Unilokk part
+        # it is a sequence of job executions
+        jobs = []  # array of jobs
+
+        for part in sequence:
+            jobs_for_part = get_jobs_for_part(part)
+
+            # unpacking jobs into one list full of all the jobs
+            for job in jobs_for_part:
+                jobs.append(job)
+
+        # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
+
+        # why running loop again? because an optimizer will bee ran before here to determine the best
+        # order or jobs for minimal Ruestungszeiten
+        for job in jobs:
+            part_name = job.get_part_name()
+            this_amount = get_output_per_part(part_name)
+            yield self.env.process(self.do_job(job, part_name, this_amount))
+
+            if all_jobs_completed_for_part(part_name):
+                #  all machines required to produce a part have been operated
+                # part is created
+                increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+                print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
+
     def unilokk_parts_creation_for_order(self, sequence):
         #  simulates the creation of Unilokk unit
 
@@ -565,7 +652,8 @@ class Lernfabrik:
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
+env.process(fabric.part_creation_2(EXECUTION_SEQUENCE_IN_PARTS))
+# env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
 
 env.run(until=SIM_TIME)
 
