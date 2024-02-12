@@ -7,6 +7,7 @@ from pymoo.optimize import minimize
 import numpy as np
 # disabling redundant warning
 from pymoo.config import Config
+
 Config.warnings['not_compiled'] = False
 
 # simpy environment declaration
@@ -70,7 +71,7 @@ RUESTUNGS_ZEIT = 0
 UNILOKK_COUNT = 0
 
 # raw materials
-ROHMATERIAL = 1.0 * 450.0  # raw material, k * m, k = amount, m = length of rod in cm
+ROHMATERIAL = 300.0  # raw material, k * m, k = amount, m = length of rod in cm
 
 
 # global helper functions
@@ -357,7 +358,7 @@ class Lernfabrik:
                 return 45 * 60
 
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Oberteil"):
-                return 45*60
+                return 45 * 60
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Unterteil"):
                 return 0
             elif (self.previously_created == "Unterteil") and (self.next_creating == "Halteteil"):
@@ -474,25 +475,24 @@ class Lernfabrik:
         increase_part_count(part_name, math.floor(output))  # add newly created part
         print(math.floor(output), part_name, "(s) was created at ", self.env.now)
 
-    def unilokk_parts_creation_for_order(self, sequence):
+    def unilokk_parts_creation_for_order(self, raw_material, sequence):
         #  simulates the creation of Unilokk unit
 
-        global ROHMATERIAL
-        while ROHMATERIAL >= 90.0:
+        while raw_material >= 90.0:
             #  basic parts creation
             for part in sequence:
                 yield self.env.process(self.part_creation(part))  # process to create a part
-                print("before: ", ROHMATERIAL, " at", self.env.now)
-                ROHMATERIAL -= 90.0  # reducing the raw materials for the part we just created
-                print("after: ", ROHMATERIAL, " at", self.env.now)
+                print("before: ", raw_material, " at", self.env.now)
+                raw_material -= 90.0  # reducing the raw materials for the part we just created
+                print("after: ", raw_material, " at", self.env.now)
 
-    def whole_process(self, execution_sequence):
+    def whole_process(self, raw_material, execution_sequence):
         # simulates the assembling of the Unilokk parts into Unilokk
         # each raw material is assumed to be a 300cm long rod, so 3 means 3 300cm rods
         # execution sequence is the sequence of part creations necessary for creating
         # parts that will fulfill orders, determined by the optimization algorithm above
         yield env.process(fabric.unilokk_parts_creation_for_order(
-            execution_sequence))  # creates the parts from raw materials
+            raw_material, execution_sequence))  # creates the parts from raw materials
 
         i = 1
         # then assemble them into Unilokk
@@ -521,8 +521,7 @@ class Lernfabrik:
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
-
+env.process(fabric.whole_process(300.0, EXECUTION_SEQUENCE_IN_PARTS))
 
 env.run(until=SIM_TIME)
 
@@ -534,5 +533,6 @@ print("RING: ", RING_COUNT, "\n")
 
 print("produced: ", UNILOKK_COUNT, " Unilokk")
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
+print("unilokk remaining: ", UNILOKK_COUNT - OBERTEIL_ORDER)
 print("remaining raw materials: ", ROHMATERIAL)
 print("total ruestungszeit: ", RUESTUNGS_ZEIT)
