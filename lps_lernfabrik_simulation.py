@@ -1,7 +1,7 @@
 import math
 import simpy
 import numpy
-import Job
+from Job import Job
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.optimize import minimize
@@ -40,10 +40,54 @@ HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
 RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
 
 # instantiating jobs
-# Oberteil jobs
+# Oberteil creation jobs
+Oberteil_Saegen = Job("Oberteil_Saegen", 34)
+Oberteil_Drehen = Job("Oberteil_Drehen", 287)
+Oberteil_Fraesen = Job("Oberteil_Fraesen", 376)
+Oberteil_Saegen.set_job_before(None)
+Oberteil_Saegen.set_job_after(Oberteil_Drehen)
+Oberteil_Drehen.set_job_before(Oberteil_Saegen)
+Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
+Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
+Oberteil_Fraesen.set_job_after(None)
+Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Saegen, Oberteil_Fraesen]
 
-# jobs for part creation
+# Unterteil creation jobs
+Unterteil_Saegen = Job("Unterteil_Saegen", 20)
+Unterteil_Drehen = Job("Unterteil_Drehen", 247)
+Unterteil_Saegen.set_job_before(None)
+Unterteil_Saegen.set_job_after(Unterteil_Drehen)
+Unterteil_Drehen.set_job_before(Unterteil_Drehen)
+Unterteil_Drehen.set_job_after(None)
+Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
+# Halteteil creation jobs
+Halteteil_Saegen = Job("Halteteil_Saegen", 4)
+Halteteil_Drehen = Job("Halteteil_Drehen", 255)
+Halteteil_Saegen.set_job_before(None)
+Halteteil_Saegen.set_job_after(Halteteil_Drehen)
+Halteteil_Drehen.set_job_before(Halteteil_Saegen)
+Halteteil_Drehen.set_job_after(None)
+Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
+
+# Ring creation jobs
+Ring_Saegen = Job("Ring_Saegen", 3)
+Ring_Drehen = Job("Ring_Drehen", 185)
+Ring_Senken_1 = Job("Ring_Senken_1", 10)
+Ring_Senken_2 = Job("Ring_Senken_2", 10)
+Ring_Saegen.set_job_before(None)
+Ring_Saegen.set_job_after(Ring_Drehen)
+Ring_Drehen.set_job_before(Ring_Saegen)
+Ring_Drehen.set_job_after(Ring_Senken_1)
+Ring_Senken_1.set_job_before(Ring_Drehen)
+Ring_Senken_1.set_job_after(Ring_Senken_2)
+Ring_Senken_2.set_job_before(Ring_Senken_1)
+Ring_Senken_2.set_job_after(None)
+Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
+
+# Finishing jobs
+Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", 180)
+Finishing_Jobs = [Fertigstellung]
 
 # part names / working strings
 OBERTEIL = "Oberteil"
