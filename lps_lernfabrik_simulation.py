@@ -243,7 +243,10 @@ def all_jobs_completed_for_part(part_name):
     for job in jobs_required:
         if not job.get_completed():
             return False
+
+    for job in jobs_required:
         job.set_completed(not job.get_completed())  # resetting for next round of part creation
+    print("completed jobs for ", part_name)
     return True
 
 
@@ -518,42 +521,7 @@ class Lernfabrik:
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
 
-    def part_creation(self, part_name):
-        #  runs consequent operations to create Unilokk part
-        self.next_creating = part_name
-        required_machines = get_machines_for_part(part_name)
-        output = get_output_per_part(part_name)  # expected yield of this part from raw material
-
-        for machine in required_machines:
-            equipping_time = self.get_ruestung_zeit(machine)  # getting equipping time
-            operating_time = self.get_operating_time(machine, part_name)  # getting operation time
-            global RUESTUNGS_ZEIT
-            RUESTUNGS_ZEIT += equipping_time
-
-            with machine.request(priority=1, preempt=False) as request:
-                yield request
-                # running operation
-                yield self.env.timeout(equipping_time)  # equipping a machine
-                self.process = self.env.process(self.operation(machine, operating_time))  # operating machine
-                env.process(self.break_machine(machine, 2, True))  # starting breakdown function
-                yield self.process
-
-                self.process = None
-
-            if machine == machine_gz200:
-                self.previously_created = part_name  # setting the control for get_ruestung_zeit function
-                if part_name == "Ring":
-                    self.done_once = not self.done_once  # setting control for get_operating_time function
-
-            output *= get_quality_grade(machine)
-
-        #  all machines required to produce a part have been operated
-        # part is created
-        increase_part_count(part_name, math.floor(output))  # add newly created part
-        print(math.floor(output), part_name, "(s) was created at ", self.env.now)
-
     def do_job(self, job, part_name, input_amount):
-        print("gets here")
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         self.next_creating = part_name
@@ -563,7 +531,7 @@ class Lernfabrik:
         equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
         global RUESTUNGS_ZEIT
-        RUESTUNGS_ZEIT += 1  # collect Ruestungszeit for statistical purposes
+        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
 
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
@@ -582,6 +550,33 @@ class Lernfabrik:
         job.set_completed(not job.get_completed())  # flipping completed boolean since we have done job
         expected_output = input_amount * get_quality_grade(required_machine)
         return expected_output
+
+    def finishing_unilokk_creation(self):
+        # simulates the Kleben, Montage, Pruefen and Verpacken processes
+        # after parts have been created
+        print("\nFinishing process has started")
+
+        i = 1
+        # then assemble them into Unilokk
+        while True:
+            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+
+                # decrement for the parts used above to create a whole Unilokk
+                decrease_part_count(OBERTEIL)
+                decrease_part_count(UNTERTEIL)
+                decrease_part_count(HALTETEIL)
+                decrease_part_count(RING)
+
+                # increase Unilokk count for the one that is created
+                global UNILOKK_COUNT
+                UNILOKK_COUNT = UNILOKK_COUNT + 1
+
+                print("unilokk ", i, " was created at ", self.env.now)
+                i = i + 1
+
+            else:
+                break
 
     def part_creation_2(self, sequence):
         # runs jobs necessary to create Unilokk part
@@ -610,43 +605,8 @@ class Lernfabrik:
                 increase_part_count(part_name, math.floor(this_amount))  # add newly created part
                 print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
-    def unilokk_parts_creation_for_order(self, sequence):
-        #  simulates the creation of Unilokk unit
-
-        #  basic parts creation
-        for part in sequence:
-            yield self.env.process(self.part_creation(part))  # process to create a part
-
-    def whole_process(self, execution_sequence):
-        # simulates the assembling of the Unilokk parts into Unilokk
-        # each raw material is assumed to be a 300cm long rod, so 3 means 3 300cm rods
-        # execution sequence is the sequence of part creations necessary for creating
-        # parts that will fulfill orders, determined by the optimization algorithm above
-        yield env.process(fabric.unilokk_parts_creation_for_order(
-            execution_sequence))  # creates the parts from raw materials
-
-        i = 1
-        # then assemble them into Unilokk
-        while True:
-            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                self.process = self.env.process(self.operation(machine_arbeitsplatz_2, 180))
-                yield self.process  # assembling parts to create Unilokk
-
-                # decrement for the parts used above to create a whole Unilokk
-                decrease_part_count(OBERTEIL)
-                decrease_part_count(UNTERTEIL)
-                decrease_part_count(HALTETEIL)
-                decrease_part_count(RING)
-
-                # increase Unilokk count for the one that is created
-                global UNILOKK_COUNT
-                UNILOKK_COUNT = UNILOKK_COUNT + 1
-
-                print("unilokk ", i, " was created at ", self.env.now)
-                i = i + 1
-
-            else:
-                break
+        # assembling parts
+        yield self.env.process(self.finishing_unilokk_creation())
 
 
 # instantiate object of Lernfabrik class
