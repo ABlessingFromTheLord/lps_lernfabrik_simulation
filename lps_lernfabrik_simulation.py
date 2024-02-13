@@ -152,6 +152,17 @@ def get_jobs_for_part(part_name):
             return Ring_Jobs
 
 
+def decrease_jobs(part_name):
+    jobs = get_jobs_for_part(part_name)
+
+    for job in jobs:
+        if job.get_completed() >= 1:
+            job.set_completed(job.get_completed() - 1)
+
+        else:
+            job.set_completed(0)
+
+
 def increase_part_count(part_name, output):
     #  increase the respective part count after the machines for part by amount "output"
     match part_name:
@@ -251,7 +262,7 @@ def all_jobs_completed_for_part(part_name):
     return True
 
 
-def insert_variable_into_table(unilokk, ruestungszeit):
+def insert_variable_into_table(sim_no, unilokk, ruestungszeit):
     # inserts statistics into out sqlite database
     sqlite_connection = sqlite3.connect('statistics.db')
     try:
@@ -259,10 +270,10 @@ def insert_variable_into_table(unilokk, ruestungszeit):
         print("Connected to SQLite")
 
         sqlite_insert_with_param = """INSERT INTO no_batch_simulation
-                          (unilokk, ruestungszeit) 
-                          VALUES (?, ?);"""
+                          (sim_no, unilokk, ruestungszeit) 
+                          VALUES (?, ?, ?);"""
 
-        data_tuple = (unilokk, ruestungszeit)
+        data_tuple = (sim_no, unilokk, ruestungszeit)
         cursor.execute(sqlite_insert_with_param, data_tuple)
         sqlite_connection.commit()
         print("Python Variables inserted successfully into SqliteDb_developers table")
@@ -334,7 +345,7 @@ def submit_order(orders):
     RING_ORDER = total_parts
 
 
-def clear_orders():
+def clear_stats():
     # clears order variables
     # use case, for example to start a new simulation
     global OBERTEIL_ORDER
@@ -345,6 +356,36 @@ def clear_orders():
     HALTETEIL_ORDER = 0
     global RING_ORDER
     RING_ORDER = 0
+
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = 0
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = 0
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = 0
+    global RING_COUNT
+    RING_COUNT = 0
+
+    global UNILOKK_COUNT
+    UNILOKK_COUNT = 0
+    global RUESTUNGS_ZEIT
+    RUESTUNGS_ZEIT = 0
+
+
+def clear_2():
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = 0
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = 0
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = 0
+    global RING_COUNT
+    RING_COUNT = 0
+
+    global UNILOKK_COUNT
+    UNILOKK_COUNT = 0
+    global RUESTUNGS_ZEIT
+    RUESTUNGS_ZEIT = 0
 
 
 def adjust(genes):
@@ -408,15 +449,6 @@ class ExecutionAmounts(Problem):
 
         out["F"] = fitness[:, None]  # Reshape to match the expected shape
         out["G"] = np.zeros((len(x), 0))  # No constraints for now
-
-
-# instantiating problem and algorithm
-problem = ExecutionAmounts()
-algorithm = NSGA2(
-    pop_size=100,
-    n_offsprings=50,
-    eliminate_duplicates=True
-)
 
 
 # simulation class
@@ -565,7 +597,6 @@ class Lernfabrik:
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         self.next_creating = part_name
 
-        # TODO: output per part is not yet defined
         required_machine = job.get_machine_required()
         equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
@@ -585,8 +616,6 @@ class Lernfabrik:
             self.previously_created = part_name  # setting the control for get_ruestung_zeit function
         if part_name == "Ring":
             self.done_once = not self.done_once  # setting control for get_operating_time function
-
-        job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
         # creating cumulative mz
         job.set_cumulative_mz(get_mz(required_machine))
@@ -622,7 +651,7 @@ class Lernfabrik:
             else:
                 break
 
-    def fulfill_orders(self, sequence):
+    def fulfill_orders(self, data_hash, sequence):
         # the whole process from part creation to order fulfillment
 
         # parts creation
@@ -644,52 +673,69 @@ class Lernfabrik:
             if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
                 print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
                 jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
-                continue
-
             else:
                 part_name = job.get_part_name()
                 this_amount = get_output_per_part(part_name)
                 yield self.env.process(self.do_job(job, part_name))
 
+                job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
+
                 if all_jobs_completed_for_part(part_name):
+                    print("gets here")
                     #  all machines required to produce a part have been operated
                     # part is created
                     this_amount *= job.get_cumulative_mz()
                     increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+
+                    #decrease_jobs(part_name)
+
                     print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
 
         # inserting data into statistics
-        insert_variable_into_table(UNILOKK_COUNT, RUESTUNGS_ZEIT)
+        insert_variable_into_table(data_hash, UNILOKK_COUNT, RUESTUNGS_ZEIT)
+
+    def simulate(self, order):
+        # simulates the production process with increasing orders
+        submit_orders(order)
+
+        # executing the optimization algorithm
+        # instantiating problem and algorithm
+        problem = ExecutionAmounts()
+        algorithm = NSGA2(
+            pop_size=100,
+            n_offsprings=50,
+            eliminate_duplicates=True
+        )
+
+        # returns the sequence to execute machines to fulfill current order
+        res = minimize(problem,
+                       algorithm,
+                       ('n_gen', 100),
+                       seed=1,
+                       verbose=False)
+
+        # result for execution sequence
+        execution_sequence = adjust(res.X)
+        execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+
+        print("Best solution found: %s" % execution_sequence_in_parts)
+
+        yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-env.run(until=SIM_TIME)
 
-for i in range(1, 1001):
-    submit_orders(i)
+for i in range(10, 30, 10):
+    print("order submitted ", i)
+    env.process(fabric.simulate(i))
+    clear_2()
 
-    # executing the optimization algorithm
-    # returns the sequence to execute machines to fulfill current order
-    res = minimize(problem,
-                   algorithm,
-                   ('n_gen', 100),
-                   seed=1,
-                   verbose=False)
-
-    # result for execution sequence
-    EXECUTION_SEQUENCE = adjust(res.X)
-    EXECUTION_SEQUENCE_IN_PARTS = get_parts_by_sequence(EXECUTION_SEQUENCE)
-
-    print("Best solution found: %s" % EXECUTION_SEQUENCE_IN_PARTS)
-
-    env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
-    clear_orders()
-
+env.run()
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
