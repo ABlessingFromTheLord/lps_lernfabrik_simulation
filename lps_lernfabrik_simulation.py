@@ -521,7 +521,7 @@ class Lernfabrik:
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
 
-    def do_job(self, job, part_name, input_amount):
+    def do_job(self, job, part_name):
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         self.next_creating = part_name
@@ -603,7 +603,7 @@ class Lernfabrik:
         for job in jobs:
             part_name = job.get_part_name()
             this_amount = get_output_per_part(part_name)
-            yield self.env.process(self.do_job(job, part_name, this_amount))
+            yield self.env.process(self.do_job(job, part_name))
 
             if all_jobs_completed_for_part(part_name):
                 #  all machines required to produce a part have been operated
@@ -630,6 +630,6 @@ print("UNTERTEIL: ", UNTERTEIL_COUNT)
 print("HALTETEIL: ", HALTETEIL_COUNT)
 print("RING: ", RING_COUNT, "\n")
 
-print("produced: ", UNILOKK_COUNT, " Unilokk")
+print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
 print("total ruestungszeit: ", RUESTUNGS_ZEIT)
