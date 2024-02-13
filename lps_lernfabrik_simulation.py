@@ -64,7 +64,7 @@ Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
 Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil",  255, machine_gz200)
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
 Halteteil_Drehen.set_job_before(Halteteil_Saegen)
@@ -282,25 +282,38 @@ def get_parts_by_sequence(sequence):
     # to get a batch that can fulfill an order
     to_return = []
 
-    for i in range(len(sequence)):
-        match i:
+    for j in range(len(sequence)):
+        match j:
             case 0:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Oberteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 1:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Unterteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 2:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Halteteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 3:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Ring")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
     return to_return
+
+
+def submit_orders(order):
+    # receives orders and sets the universal variables OBERTEIL_ORDER,
+    # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = order
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = order
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = order
+    global RING_ORDER
+    RING_ORDER = order
 
 
 def submit_order(orders):
@@ -321,19 +334,32 @@ def submit_order(orders):
     RING_ORDER = total_parts
 
 
+def clear_orders():
+    # clears order variables
+    # use case, for example to start a new simulation
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = 0
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = 0
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = 0
+    global RING_ORDER
+    RING_ORDER = 0
+
+
 def adjust(genes):
     # if the machine capacity greater than order, genes are always zero
     # this method adjusts that to make sure if that's the case, then the
     # machine is run at least once
     # other use case of the method is to round up
     copy = []
-    for i in range(len(genes)):
-        if 0 < genes[i] < 1:
-            genes[i] = 1
-            copy.append(int(genes[i]))
+    for k in range(len(genes)):
+        if 0 < genes[k] < 1:
+            genes[k] = 1
+            copy.append(int(genes[k]))
         else:
-            genes[i] = math.ceil(genes[i])
-            copy.append(int(genes[i]))
+            genes[k] = math.ceil(genes[k])
+            copy.append(int(genes[k]))
     return copy
 
 
@@ -356,26 +382,26 @@ class ExecutionAmounts(Problem):
         total_halteteil = np.zeros(len(x))
         total_ring = np.zeros(len(x))
 
-        for i in range(len(x)):
-            if OBERTEIL_COUNT == 0 and x[i, 0] == 0:
-                total_oberteil[i] = 1
-            elif x[i, 0] > 0:
-                total_oberteil[i] = OBERTEIL_PRODUCTION * x[i, 0]
+        for m in range(len(x)):
+            if OBERTEIL_COUNT == 0 and x[m, 0] == 0:
+                total_oberteil[m] = 1
+            elif x[m, 0] > 0:
+                total_oberteil[m] = OBERTEIL_PRODUCTION * x[m, 0]
 
-            if UNTERTEIL_COUNT == 0 and x[i, 1] == 0:
-                total_oberteil[i] = 1
-            elif x[i, 1] > 0:
-                total_unterteil[i] = UNTERTEIL_PRODUCTION * x[i, 1]
+            if UNTERTEIL_COUNT == 0 and x[m, 1] == 0:
+                total_oberteil[m] = 1
+            elif x[m, 1] > 0:
+                total_unterteil[m] = UNTERTEIL_PRODUCTION * x[m, 1]
 
-            if HALTETEIL_COUNT == 0 and x[i, 2] == 0:
-                total_halteteil[i] = 1
-            elif x[i, 2] > 0:
-                total_halteteil[i] = HALTETEIL_PRODUCTION * x[i, 2]
+            if HALTETEIL_COUNT == 0 and x[m, 2] == 0:
+                total_halteteil[m] = 1
+            elif x[m, 2] > 0:
+                total_halteteil[m] = HALTETEIL_PRODUCTION * x[m, 2]
 
-            if RING_COUNT == 0 and x[i, 3] == 0:
-                total_ring[i] = 1
-            elif x[i, 3] > 0:
-                total_ring[i] = RING_PRODUCTION * x[i, 3]
+            if RING_COUNT == 0 and x[m, 3] == 0:
+                total_ring[m] = 1
+            elif x[m, 3] > 0:
+                total_ring[m] = RING_PRODUCTION * x[m, 3]
 
         fitness = (np.abs(total_oberteil - OBERTEIL_ORDER) + np.abs(total_unterteil - UNTERTEIL_ORDER) +
                    np.abs(total_halteteil - HALTETEIL_ORDER) + np.abs(total_ring - RING_ORDER))
@@ -588,7 +614,7 @@ class Lernfabrik:
         # after parts have been created
         print("\nFinishing process has started")
 
-        i = 1
+        n = 1
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
@@ -604,8 +630,8 @@ class Lernfabrik:
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
 
-                print("unilokk ", i, " was created at ", self.env.now)
-                i = i + 1
+                print("unilokk ", n, " was created at ", self.env.now)
+                n = n + 1
 
             else:
                 break
@@ -656,10 +682,13 @@ class Lernfabrik:
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
-test_seq = ["Oberteil, Unterteil"]
-env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
-
 env.run(until=SIM_TIME)
+
+for i in range(1, 1001):
+    submit_orders(i)
+    env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
+    clear_orders()
+
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
@@ -670,7 +699,3 @@ print("RING: ", RING_COUNT, "\n")
 print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
 print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
-
-
-
-
