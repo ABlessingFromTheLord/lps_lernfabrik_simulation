@@ -60,6 +60,9 @@ RUESTUNGS_ZEIT = 0
 # unilokk created
 UNILOKK_COUNT = 0
 
+# best permutation and minimal ruestungszeit
+PERMUTATION = None
+MINIMAL_RUESTUNGSZEIT = 0
 
 # global helper functions
 def get_machines_for_part(part_name):
@@ -282,33 +285,6 @@ def submit_order(orders):
 
 
 def clear_stats():
-    # clears order variables
-    # use case, for example to start a new simulation
-    global OBERTEIL_ORDER
-    OBERTEIL_ORDER = 0
-    global UNTERTEIL_ORDER
-    UNTERTEIL_ORDER = 0
-    global HALTETEIL_ORDER
-    HALTETEIL_ORDER = 0
-    global RING_ORDER
-    RING_ORDER = 0
-
-    global OBERTEIL_COUNT
-    OBERTEIL_COUNT = 0
-    global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT = 0
-    global HALTETEIL_COUNT
-    HALTETEIL_COUNT = 0
-    global RING_COUNT
-    RING_COUNT = 0
-
-    global UNILOKK_COUNT
-    UNILOKK_COUNT = 0
-    global RUESTUNGS_ZEIT
-    RUESTUNGS_ZEIT = 0
-
-
-def clear_2():
     global OBERTEIL_COUNT
     OBERTEIL_COUNT = 0
     global UNTERTEIL_COUNT
@@ -689,8 +665,11 @@ for list_index in range(len(permuted_list)):
     permuted_list[list_index] = list(permuted_list[list_index])
 
 print(permuted_list)
+print(len(permuted_list))
 
-for i in permuted_list:
+list_of_minimals = []
+
+for i in range(len(permuted_list)):
     # instantiate object of Lernfabrik class
     env = simpy.Environment()
 
@@ -761,11 +740,23 @@ for i in permuted_list:
 
     SIM_TIME = 86400
     fabric = Lernfabrik(env)
-    print("permutation ", i)
-    env.process(fabric.fulfill_orders(i))
+    env.process(fabric.fulfill_orders(permuted_list[i]))
     env.run(until=SIM_TIME)
+    print("\n", i, "st simulation had ", RUESTUNGS_ZEIT, " Ruestungszeit\n")
+
+    if i == 0:
+        MINIMAL_RUESTUNGSZEIT = RUESTUNGS_ZEIT
+    else:
+        if RUESTUNGS_ZEIT < MINIMAL_RUESTUNGSZEIT:
+            MINIMAL_RUESTUNGSZEIT = RUESTUNGS_ZEIT
+            PERMUTATION = permuted_list[i]
+        if RUESTUNGS_ZEIT <= 9300:
+            list_of_minimals.append(permuted_list[i])
+
     clear_stats()
 
+print("\n best permutation is ", PERMUTATION, " with time ", MINIMAL_RUESTUNGSZEIT, "\n")
+print(list_of_minimals)
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
