@@ -1,6 +1,7 @@
 import math
 import simpy
 import numpy
+import sqlite3
 from Job import Job
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -639,4 +640,35 @@ print("RING: ", RING_COUNT, "\n")
 
 print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
-print("total ruestungszeit: ", RUESTUNGS_ZEIT)
+print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
+
+
+# inserting data into statistics
+sqlite_connection = sqlite3.connect('statistics.db')
+
+
+def insert_variable_into_table(unilokk, ruestungszeit):
+    try:
+        cursor = sqlite_connection.cursor()
+        print("Connected to SQLite")
+
+        sqlite_insert_with_param = """INSERT INTO no_batch_simulation
+                          (unilokk, ruestungszeit) 
+                          VALUES (?, ?);"""
+
+        data_tuple = (unilokk, ruestungszeit)
+        cursor.execute(sqlite_insert_with_param, data_tuple)
+        sqlite_connection.commit()
+        print("Python Variables inserted successfully into SqliteDb_developers table")
+
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Failed to insert Python variable into sqlite table", error)
+    finally:
+        if sqlite_connection:
+            sqlite_connection.close()
+            print("The SQLite connection is closed")
+
+
+# insert_variable_into_table(UNILOKK_COUNT, RUESTUNGS_ZEIT)
