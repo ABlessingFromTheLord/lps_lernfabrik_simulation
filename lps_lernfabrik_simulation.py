@@ -281,33 +281,6 @@ def submit_order(orders):
 
 
 def clear_stats():
-    # clears order variables
-    # use case, for example to start a new simulation
-    global OBERTEIL_ORDER
-    OBERTEIL_ORDER = 0
-    global UNTERTEIL_ORDER
-    UNTERTEIL_ORDER = 0
-    global HALTETEIL_ORDER
-    HALTETEIL_ORDER = 0
-    global RING_ORDER
-    RING_ORDER = 0
-
-    global OBERTEIL_COUNT
-    OBERTEIL_COUNT = 0
-    global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT = 0
-    global HALTETEIL_COUNT
-    HALTETEIL_COUNT = 0
-    global RING_COUNT
-    RING_COUNT = 0
-
-    global UNILOKK_COUNT
-    UNILOKK_COUNT = 0
-    global RUESTUNGS_ZEIT
-    RUESTUNGS_ZEIT = 0
-
-
-def clear_2():
     global OBERTEIL_COUNT
     OBERTEIL_COUNT = 0
     global UNTERTEIL_COUNT
@@ -661,11 +634,11 @@ class Lernfabrik:
         yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
-x = 210
-y = 301
+p = 210
+q = 301
 step = 20
 
-for i in range(x, y, step):
+for i in range(p, q, step):
     # instantiate object of Lernfabrik class
     env = simpy.Environment()
 
@@ -739,7 +712,7 @@ for i in range(x, y, step):
     print("order submitted ", i)
     env.process(fabric.simulate(i))
     env.run(until=SIM_TIME)
-    clear_2()
+    clear_stats()
 
 
 # analysis and results
