@@ -367,7 +367,7 @@ def adjust(genes):
 # submit order
 
 # submit order and run algorithm
-submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
+# submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
 
 
 # optimization problem definition
@@ -417,20 +417,6 @@ algorithm = NSGA2(
     n_offsprings=50,
     eliminate_duplicates=True
 )
-
-# executing the optimization algorithm
-# returns the sequence to execute machines to fulfill current order
-res = minimize(problem,
-               algorithm,
-               ('n_gen', 100),
-               seed=1,
-               verbose=False)
-
-# result for execution sequence
-EXECUTION_SEQUENCE = adjust(res.X)
-EXECUTION_SEQUENCE_IN_PARTS = get_parts_by_sequence(EXECUTION_SEQUENCE)
-
-print("Best solution found: %s" % EXECUTION_SEQUENCE_IN_PARTS)
 
 
 # simulation class
@@ -686,6 +672,21 @@ env.run(until=SIM_TIME)
 
 for i in range(1, 1001):
     submit_orders(i)
+
+    # executing the optimization algorithm
+    # returns the sequence to execute machines to fulfill current order
+    res = minimize(problem,
+                   algorithm,
+                   ('n_gen', 100),
+                   seed=1,
+                   verbose=False)
+
+    # result for execution sequence
+    EXECUTION_SEQUENCE = adjust(res.X)
+    EXECUTION_SEQUENCE_IN_PARTS = get_parts_by_sequence(EXECUTION_SEQUENCE)
+
+    print("Best solution found: %s" % EXECUTION_SEQUENCE_IN_PARTS)
+
     env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
     clear_orders()
 
