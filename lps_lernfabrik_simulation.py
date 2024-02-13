@@ -661,7 +661,7 @@ class Lernfabrik:
         yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
-for i in range(10, 201, 20):
+for i in range(10, 10000, 20):
     # instantiate object of Lernfabrik class
     env = simpy.Environment()
 
