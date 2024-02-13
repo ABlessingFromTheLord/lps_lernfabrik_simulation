@@ -10,7 +10,7 @@ class Job:
         self.job_before = Job
         self.job_after = Job
         self.machine_required = machine
-        self.completed = False
+        self.completed = 0
         self.cumulative_mz = None
 
     # getters
@@ -45,8 +45,8 @@ class Job:
     def set_job_after(self, job):
         self.job_after = job
 
-    def set_completed(self, boolean):
-        self.completed = boolean
+    def set_completed(self, value):
+        self.completed = value
 
     def set_cumulative_mz(self, value):
         self.cumulative_mz = value

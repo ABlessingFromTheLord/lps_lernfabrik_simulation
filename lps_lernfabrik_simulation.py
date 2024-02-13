@@ -241,11 +241,11 @@ def all_jobs_completed_for_part(part_name):
     jobs_required = get_jobs_for_part(part_name)
 
     for job in jobs_required:
-        if not job.get_completed():
+        if job.get_completed() == 0:
             return False
 
     for job in jobs_required:
-        job.set_completed(not job.get_completed())  # resetting for next round of part creation
+        job.set_completed(job.get_completed() - 1)  # removing one job to combine to form a part
     print("completed jobs for ", part_name)
     return True
 
@@ -405,7 +405,7 @@ class Lernfabrik:
                 operating_time = 0
                 print(f"finish time is {self.env.now} seconds")
 
-            except simpy.Interrupt as interrupt:
+            except simpy.Interrupt:
                 self.currently_broken = True
 
                 print(f"Machine{machine} got PREEMPTED at {self.env.now}")  # TODO: comment out after proving
@@ -547,7 +547,7 @@ class Lernfabrik:
         if part_name == "Ring":
             self.done_once = not self.done_once  # setting control for get_operating_time function
 
-        job.set_completed(not job.get_completed())  # flipping completed boolean since we have done job
+        job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
         # creating cumulative mz
         job.set_cumulative_mz(get_mz(required_machine))
