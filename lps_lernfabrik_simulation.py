@@ -1,6 +1,7 @@
 import math
 import simpy
 import numpy
+import sqlite3
 from Job import Job
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -12,14 +13,7 @@ from pymoo.config import Config
 Config.warnings['not_compiled'] = False
 
 # simpy environment declaration
-env = simpy.Environment()
 
-# instantiate machines as simpy resources
-machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
-machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
-machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
-machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
 # global variables
 PARTS_MADE = 0
@@ -32,64 +26,6 @@ FZ12_MZ = 0  # TODO: get value
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
 MTTR = 2 * 60  # TODO: setting it to one minute causes terminated processes to be interrupted
-
-# machines for part creation
-OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
-UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
-HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
-
-# instantiating jobs
-# Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
-Oberteil_Saegen.set_job_before(None)
-Oberteil_Saegen.set_job_after(Oberteil_Drehen)
-Oberteil_Drehen.set_job_before(Oberteil_Saegen)
-Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
-Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
-Oberteil_Fraesen.set_job_after(None)
-Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
-
-# Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
-Unterteil_Saegen.set_job_before(None)
-Unterteil_Saegen.set_job_after(Unterteil_Drehen)
-Unterteil_Drehen.set_job_before(Unterteil_Saegen)
-Unterteil_Drehen.set_job_after(None)
-Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
-
-# Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil",  255, machine_gz200)
-Halteteil_Saegen.set_job_before(None)
-Halteteil_Saegen.set_job_after(Halteteil_Drehen)
-Halteteil_Drehen.set_job_before(Halteteil_Saegen)
-Halteteil_Drehen.set_job_after(None)
-Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
-
-# Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
-Ring_Saegen.set_job_before(None)
-Ring_Saegen.set_job_after(Ring_Drehen)
-Ring_Drehen.set_job_before(Ring_Saegen)
-Ring_Drehen.set_job_after(Ring_Senken_1)
-Ring_Senken_1.set_job_before(Ring_Drehen)
-Ring_Senken_1.set_job_after(Ring_Senken_2)
-Ring_Senken_2.set_job_before(Ring_Senken_1)
-Ring_Senken_2.set_job_after(None)
-Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
-
-# Finishing jobs
-Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
-Fertigstellung.set_job_before(None)
-Fertigstellung.set_job_after(None)
-Finishing_Jobs = [Fertigstellung]
 
 # part names / working strings
 OBERTEIL = "Oberteil"
@@ -149,6 +85,17 @@ def get_jobs_for_part(part_name):
             return Halteteil_Jobs
         case "Ring":
             return Ring_Jobs
+
+
+def decrease_jobs(part_name):
+    jobs = get_jobs_for_part(part_name)
+
+    for job in jobs:
+        if job.get_completed() >= 1:
+            job.set_completed(job.get_completed() - 1)
+
+        else:
+            job.set_completed(0)
 
 
 def increase_part_count(part_name, output):
@@ -250,30 +197,69 @@ def all_jobs_completed_for_part(part_name):
     return True
 
 
+def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
+    # inserts statistics into out sqlite database
+    sqlite_connection = sqlite3.connect('statistics.db')
+    try:
+        cursor = sqlite_connection.cursor()
+        print("Connected to SQLite")
+
+        sqlite_insert_with_param = f"""INSERT INTO {table_name}
+                          (ordered, produced, ruestungszeit) 
+                          VALUES (?, ?, ?);"""
+
+        data_tuple = (ordered, produced, ruestungszeit)
+        cursor.execute(sqlite_insert_with_param, data_tuple)
+        sqlite_connection.commit()
+        print("Python Variables inserted successfully into SqliteDb_developers table")
+
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Failed to insert Python variable into sqlite table", error)
+    finally:
+        if sqlite_connection:
+            sqlite_connection.close()
+            print("The SQLite connection is closed")
+
+
 def get_parts_by_sequence(sequence):
     # returns part names in the amount their machines are needed to be executed
     # to get a batch that can fulfill an order
     to_return = []
 
-    for i in range(len(sequence)):
-        match i:
+    for j in range(len(sequence)):
+        match j:
             case 0:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Oberteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 1:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Unterteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 2:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Halteteil")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
             case 3:
-                while sequence[i] > 0:
+                while sequence[j] > 0:
                     to_return.append("Ring")
-                    sequence[i] -= 1
+                    sequence[j] -= 1
     return to_return
+
+
+def submit_orders(order):
+    # receives orders and sets the universal variables OBERTEIL_ORDER,
+    # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = order
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = order
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = order
+    global RING_ORDER
+    RING_ORDER = order
 
 
 def submit_order(orders):
@@ -294,19 +280,62 @@ def submit_order(orders):
     RING_ORDER = total_parts
 
 
+def clear_stats():
+    # clears order variables
+    # use case, for example to start a new simulation
+    global OBERTEIL_ORDER
+    OBERTEIL_ORDER = 0
+    global UNTERTEIL_ORDER
+    UNTERTEIL_ORDER = 0
+    global HALTETEIL_ORDER
+    HALTETEIL_ORDER = 0
+    global RING_ORDER
+    RING_ORDER = 0
+
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = 0
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = 0
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = 0
+    global RING_COUNT
+    RING_COUNT = 0
+
+    global UNILOKK_COUNT
+    UNILOKK_COUNT = 0
+    global RUESTUNGS_ZEIT
+    RUESTUNGS_ZEIT = 0
+
+
+def clear_2():
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = 0
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = 0
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = 0
+    global RING_COUNT
+    RING_COUNT = 0
+
+    global UNILOKK_COUNT
+    UNILOKK_COUNT = 0
+    global RUESTUNGS_ZEIT
+    RUESTUNGS_ZEIT = 0
+
+
 def adjust(genes):
     # if the machine capacity greater than order, genes are always zero
     # this method adjusts that to make sure if that's the case, then the
     # machine is run at least once
     # other use case of the method is to round up
     copy = []
-    for i in range(len(genes)):
-        if 0 < genes[i] < 1:
-            genes[i] = 1
-            copy.append(int(genes[i]))
+    for k in range(len(genes)):
+        if 0 < genes[k] < 1:
+            genes[k] = 1
+            copy.append(int(genes[k]))
         else:
-            genes[i] = math.ceil(genes[i])
-            copy.append(int(genes[i]))
+            genes[k] = math.ceil(genes[k])
+            copy.append(int(genes[k]))
     return copy
 
 
@@ -314,7 +343,7 @@ def adjust(genes):
 # submit order
 
 # submit order and run algorithm
-submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
+# submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
 
 
 # optimization problem definition
@@ -329,55 +358,32 @@ class ExecutionAmounts(Problem):
         total_halteteil = np.zeros(len(x))
         total_ring = np.zeros(len(x))
 
-        for i in range(len(x)):
-            if OBERTEIL_COUNT == 0 and x[i, 0] == 0:
-                total_oberteil[i] = 1
-            elif x[i, 0] > 0:
-                total_oberteil[i] = OBERTEIL_PRODUCTION * x[i, 0]
+        for m in range(len(x)):
+            if OBERTEIL_COUNT == 0 and x[m, 0] == 0:
+                total_oberteil[m] = 1
+            elif x[m, 0] > 0:
+                total_oberteil[m] = OBERTEIL_PRODUCTION * x[m, 0]
 
-            if UNTERTEIL_COUNT == 0 and x[i, 1] == 0:
-                total_oberteil[i] = 1
-            elif x[i, 1] > 0:
-                total_unterteil[i] = UNTERTEIL_PRODUCTION * x[i, 1]
+            if UNTERTEIL_COUNT == 0 and x[m, 1] == 0:
+                total_oberteil[m] = 1
+            elif x[m, 1] > 0:
+                total_unterteil[m] = UNTERTEIL_PRODUCTION * x[m, 1]
 
-            if HALTETEIL_COUNT == 0 and x[i, 2] == 0:
-                total_halteteil[i] = 1
-            elif x[i, 2] > 0:
-                total_halteteil[i] = HALTETEIL_PRODUCTION * x[i, 2]
+            if HALTETEIL_COUNT == 0 and x[m, 2] == 0:
+                total_halteteil[m] = 1
+            elif x[m, 2] > 0:
+                total_halteteil[m] = HALTETEIL_PRODUCTION * x[m, 2]
 
-            if RING_COUNT == 0 and x[i, 3] == 0:
-                total_ring[i] = 1
-            elif x[i, 3] > 0:
-                total_ring[i] = RING_PRODUCTION * x[i, 3]
+            if RING_COUNT == 0 and x[m, 3] == 0:
+                total_ring[m] = 1
+            elif x[m, 3] > 0:
+                total_ring[m] = RING_PRODUCTION * x[m, 3]
 
         fitness = (np.abs(total_oberteil - OBERTEIL_ORDER) + np.abs(total_unterteil - UNTERTEIL_ORDER) +
                    np.abs(total_halteteil - HALTETEIL_ORDER) + np.abs(total_ring - RING_ORDER))
 
         out["F"] = fitness[:, None]  # Reshape to match the expected shape
         out["G"] = np.zeros((len(x), 0))  # No constraints for now
-
-
-# instantiating problem and algorithm
-problem = ExecutionAmounts()
-algorithm = NSGA2(
-    pop_size=100,
-    n_offsprings=50,
-    eliminate_duplicates=True
-)
-
-# executing the optimization algorithm
-# returns the sequence to execute machines to fulfill current order
-res = minimize(problem,
-               algorithm,
-               ('n_gen', 100),
-               seed=1,
-               verbose=False)
-
-# result for execution sequence
-EXECUTION_SEQUENCE = adjust(res.X)
-EXECUTION_SEQUENCE_IN_PARTS = get_parts_by_sequence(EXECUTION_SEQUENCE)
-
-print("Best solution found: %s" % EXECUTION_SEQUENCE_IN_PARTS)
 
 
 # simulation class
@@ -526,7 +532,6 @@ class Lernfabrik:
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         self.next_creating = part_name
 
-        # TODO: output per part is not yet defined
         required_machine = job.get_machine_required()
         equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
@@ -537,7 +542,7 @@ class Lernfabrik:
             yield request
             yield self.env.timeout(equipping_time)
             self.process = self.env.process(self.operation(required_machine, operating_time))  # operating machinery
-            env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
+            self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
             yield self.process
 
             self.process = None
@@ -546,8 +551,6 @@ class Lernfabrik:
             self.previously_created = part_name  # setting the control for get_ruestung_zeit function
         if part_name == "Ring":
             self.done_once = not self.done_once  # setting control for get_operating_time function
-
-        job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
         # creating cumulative mz
         job.set_cumulative_mz(get_mz(required_machine))
@@ -561,7 +564,7 @@ class Lernfabrik:
         # after parts have been created
         print("\nFinishing process has started")
 
-        i = 1
+        n = 1
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
@@ -577,13 +580,13 @@ class Lernfabrik:
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
 
-                print("unilokk ", i, " was created at ", self.env.now)
-                i = i + 1
+                print("unilokk ", n, " was created at ", self.env.now)
+                n = n + 1
 
             else:
                 break
 
-    def fulfill_orders(self, sequence):
+    def fulfill_orders(self, data_hash, sequence):
         # the whole process from part creation to order fulfillment
 
         # parts creation
@@ -605,31 +608,139 @@ class Lernfabrik:
             if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
                 print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
                 jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
-                continue
-
             else:
                 part_name = job.get_part_name()
                 this_amount = get_output_per_part(part_name)
                 yield self.env.process(self.do_job(job, part_name))
 
+                job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
+
                 if all_jobs_completed_for_part(part_name):
+                    print("gets here")
                     #  all machines required to produce a part have been operated
                     # part is created
                     this_amount *= job.get_cumulative_mz()
                     increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+
+                    # decrease_jobs(part_name)
+
                     print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
 
+        # inserting data into statistics
+        insert_variable_into_table("no_batch_simulation", data_hash, UNILOKK_COUNT, RUESTUNGS_ZEIT)
 
-# instantiate object of Lernfabrik class
-SIM_TIME = 86400
-fabric = Lernfabrik(env)
-test_seq = ["Oberteil, Unterteil"]
-env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
+    def simulate(self, order):
+        # simulates the production process with increasing orders
+        submit_orders(order)
 
-env.run(until=SIM_TIME)
+        # executing the optimization algorithm
+        # instantiating problem and algorithm
+        problem = ExecutionAmounts()
+        algorithm = NSGA2(
+            pop_size=100,
+            n_offsprings=50,
+            eliminate_duplicates=True
+        )
+
+        # returns the sequence to execute machines to fulfill current order
+        res = minimize(problem,
+                       algorithm,
+                       ('n_gen', 100),
+                       seed=1,
+                       verbose=False)
+
+        # result for execution sequence
+        execution_sequence = adjust(res.X)
+        execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+
+        print("Best solution found: %s" % execution_sequence_in_parts)
+
+        yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
+
+
+x = 210
+y = 301
+step = 20
+
+for i in range(x, y, step):
+    # instantiate object of Lernfabrik class
+    env = simpy.Environment()
+
+    # instantiate machines as simpy resources
+    machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
+    machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
+    machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
+    machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+    machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+
+    # machines for part creation
+    OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
+    UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
+    HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
+    RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
+
+    # instantiating jobs
+    # Oberteil creation jobs
+    Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
+    Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
+    Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+    Oberteil_Saegen.set_job_before(None)
+    Oberteil_Saegen.set_job_after(Oberteil_Drehen)
+    Oberteil_Drehen.set_job_before(Oberteil_Saegen)
+    Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
+    Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
+    Oberteil_Fraesen.set_job_after(None)
+    Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
+
+    # Unterteil creation jobs
+    Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
+    Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+    Unterteil_Saegen.set_job_before(None)
+    Unterteil_Saegen.set_job_after(Unterteil_Drehen)
+    Unterteil_Drehen.set_job_before(Unterteil_Saegen)
+    Unterteil_Drehen.set_job_after(None)
+    Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
+
+    # Halteteil creation jobs
+    Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
+    Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+    Halteteil_Saegen.set_job_before(None)
+    Halteteil_Saegen.set_job_after(Halteteil_Drehen)
+    Halteteil_Drehen.set_job_before(Halteteil_Saegen)
+    Halteteil_Drehen.set_job_after(None)
+    Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
+
+    # Ring creation jobs
+    Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
+    Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
+    Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
+    Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+    Ring_Saegen.set_job_before(None)
+    Ring_Saegen.set_job_after(Ring_Drehen)
+    Ring_Drehen.set_job_before(Ring_Saegen)
+    Ring_Drehen.set_job_after(Ring_Senken_1)
+    Ring_Senken_1.set_job_before(Ring_Drehen)
+    Ring_Senken_1.set_job_after(Ring_Senken_2)
+    Ring_Senken_2.set_job_before(Ring_Senken_1)
+    Ring_Senken_2.set_job_after(None)
+    Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
+
+    # Finishing jobs
+    Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+    Fertigstellung.set_job_before(None)
+    Fertigstellung.set_job_after(None)
+    Finishing_Jobs = [Fertigstellung]
+
+    SIM_TIME = 86400
+    fabric = Lernfabrik(env)
+    print("order submitted ", i)
+    env.process(fabric.simulate(i))
+    env.run(until=SIM_TIME)
+    clear_2()
+
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
@@ -639,4 +750,4 @@ print("RING: ", RING_COUNT, "\n")
 
 print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
-print("total ruestungszeit: ", RUESTUNGS_ZEIT)
+print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
