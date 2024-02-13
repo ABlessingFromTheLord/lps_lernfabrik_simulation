@@ -251,6 +251,32 @@ def all_jobs_completed_for_part(part_name):
     return True
 
 
+def insert_variable_into_table(unilokk, ruestungszeit):
+    # inserts statistics into out sqlite database
+    sqlite_connection = sqlite3.connect('statistics.db')
+    try:
+        cursor = sqlite_connection.cursor()
+        print("Connected to SQLite")
+
+        sqlite_insert_with_param = """INSERT INTO no_batch_simulation
+                          (unilokk, ruestungszeit) 
+                          VALUES (?, ?);"""
+
+        data_tuple = (unilokk, ruestungszeit)
+        cursor.execute(sqlite_insert_with_param, data_tuple)
+        sqlite_connection.commit()
+        print("Python Variables inserted successfully into SqliteDb_developers table")
+
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("Failed to insert Python variable into sqlite table", error)
+    finally:
+        if sqlite_connection:
+            sqlite_connection.close()
+            print("The SQLite connection is closed")
+
+
 def get_parts_by_sequence(sequence):
     # returns part names in the amount their machines are needed to be executed
     # to get a batch that can fulfill an order
@@ -623,6 +649,9 @@ class Lernfabrik:
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
 
+        # inserting data into statistics
+        insert_variable_into_table(UNILOKK_COUNT, RUESTUNGS_ZEIT)
+
 
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
@@ -643,32 +672,5 @@ print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%"
 print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
 
 
-# inserting data into statistics
-sqlite_connection = sqlite3.connect('statistics.db')
 
 
-def insert_variable_into_table(unilokk, ruestungszeit):
-    try:
-        cursor = sqlite_connection.cursor()
-        print("Connected to SQLite")
-
-        sqlite_insert_with_param = """INSERT INTO no_batch_simulation
-                          (unilokk, ruestungszeit) 
-                          VALUES (?, ?);"""
-
-        data_tuple = (unilokk, ruestungszeit)
-        cursor.execute(sqlite_insert_with_param, data_tuple)
-        sqlite_connection.commit()
-        print("Python Variables inserted successfully into SqliteDb_developers table")
-
-        cursor.close()
-
-    except sqlite3.Error as error:
-        print("Failed to insert Python variable into sqlite table", error)
-    finally:
-        if sqlite_connection:
-            sqlite_connection.close()
-            print("The SQLite connection is closed")
-
-
-# insert_variable_into_table(UNILOKK_COUNT, RUESTUNGS_ZEIT)
