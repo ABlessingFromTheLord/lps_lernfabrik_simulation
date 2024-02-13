@@ -57,7 +57,7 @@ Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
 Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
-Unterteil_Drehen.set_job_before(Unterteil_Drehen)
+Unterteil_Drehen.set_job_before(Unterteil_Saegen)
 Unterteil_Drehen.set_job_after(None)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
@@ -601,16 +601,23 @@ class Lernfabrik:
         # why running loop again? because an optimizer will bee ran before here to determine the best
         # order or jobs for minimal Ruestungszeiten
         for job in jobs:
-            part_name = job.get_part_name()
-            this_amount = get_output_per_part(part_name)
-            yield self.env.process(self.do_job(job, part_name))
+            # check if job required to be done before this is done
+            if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
+                print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
+                jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
+                continue
 
-            if all_jobs_completed_for_part(part_name):
-                #  all machines required to produce a part have been operated
-                # part is created
-                this_amount *= job.get_cumulative_mz()
-                increase_part_count(part_name, math.floor(this_amount))  # add newly created part
-                print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
+            else:
+                part_name = job.get_part_name()
+                this_amount = get_output_per_part(part_name)
+                yield self.env.process(self.do_job(job, part_name))
+
+                if all_jobs_completed_for_part(part_name):
+                    #  all machines required to produce a part have been operated
+                    # part is created
+                    this_amount *= job.get_cumulative_mz()
+                    increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+                    print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
@@ -619,8 +626,8 @@ class Lernfabrik:
 # instantiate object of Lernfabrik class
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
+test_seq = ["Oberteil, Unterteil"]
 env.process(fabric.fulfill_orders(EXECUTION_SEQUENCE_IN_PARTS))
-# env.process(fabric.whole_process(EXECUTION_SEQUENCE_IN_PARTS))
 
 env.run(until=SIM_TIME)
 
