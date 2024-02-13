@@ -197,7 +197,7 @@ def all_jobs_completed_for_part(part_name):
     return True
 
 
-def insert_variable_into_table(table_name, sim_no, unilokk, ruestungszeit):
+def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
     # inserts statistics into out sqlite database
     sqlite_connection = sqlite3.connect('statistics.db')
     try:
@@ -205,10 +205,10 @@ def insert_variable_into_table(table_name, sim_no, unilokk, ruestungszeit):
         print("Connected to SQLite")
 
         sqlite_insert_with_param = f"""INSERT INTO {table_name}
-                          (sim_no, unilokk, ruestungszeit) 
+                          (ordered, produced, ruestungszeit) 
                           VALUES (?, ?, ?);"""
 
-        data_tuple = (sim_no, unilokk, ruestungszeit)
+        data_tuple = (ordered, produced, ruestungszeit)
         cursor.execute(sqlite_insert_with_param, data_tuple)
         sqlite_connection.commit()
         print("Python Variables inserted successfully into SqliteDb_developers table")
@@ -661,7 +661,11 @@ class Lernfabrik:
         yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
-for i in range(10, 10000, 20):
+x = 210
+y = 301
+step = 20
+
+for i in range(x, y, step):
     # instantiate object of Lernfabrik class
     env = simpy.Environment()
 
