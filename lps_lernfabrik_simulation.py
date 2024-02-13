@@ -13,14 +13,7 @@ from pymoo.config import Config
 Config.warnings['not_compiled'] = False
 
 # simpy environment declaration
-env = simpy.Environment()
 
-# instantiate machines as simpy resources
-machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
-machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
-machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
-machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
 # global variables
 PARTS_MADE = 0
@@ -33,64 +26,6 @@ FZ12_MZ = 0  # TODO: get value
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
 MTTR = 2 * 60  # TODO: setting it to one minute causes terminated processes to be interrupted
-
-# machines for part creation
-OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
-UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
-HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
-
-# instantiating jobs
-# Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
-Oberteil_Saegen.set_job_before(None)
-Oberteil_Saegen.set_job_after(Oberteil_Drehen)
-Oberteil_Drehen.set_job_before(Oberteil_Saegen)
-Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
-Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
-Oberteil_Fraesen.set_job_after(None)
-Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
-
-# Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
-Unterteil_Saegen.set_job_before(None)
-Unterteil_Saegen.set_job_after(Unterteil_Drehen)
-Unterteil_Drehen.set_job_before(Unterteil_Saegen)
-Unterteil_Drehen.set_job_after(None)
-Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
-
-# Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
-Halteteil_Saegen.set_job_before(None)
-Halteteil_Saegen.set_job_after(Halteteil_Drehen)
-Halteteil_Drehen.set_job_before(Halteteil_Saegen)
-Halteteil_Drehen.set_job_after(None)
-Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
-
-# Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
-Ring_Saegen.set_job_before(None)
-Ring_Saegen.set_job_after(Ring_Drehen)
-Ring_Drehen.set_job_before(Ring_Saegen)
-Ring_Drehen.set_job_after(Ring_Senken_1)
-Ring_Senken_1.set_job_before(Ring_Drehen)
-Ring_Senken_1.set_job_after(Ring_Senken_2)
-Ring_Senken_2.set_job_before(Ring_Senken_1)
-Ring_Senken_2.set_job_after(None)
-Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
-
-# Finishing jobs
-Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
-Fertigstellung.set_job_before(None)
-Fertigstellung.set_job_after(None)
-Finishing_Jobs = [Fertigstellung]
 
 # part names / working strings
 OBERTEIL = "Oberteil"
@@ -262,14 +197,14 @@ def all_jobs_completed_for_part(part_name):
     return True
 
 
-def insert_variable_into_table(sim_no, unilokk, ruestungszeit):
+def insert_variable_into_table(table_name, sim_no, unilokk, ruestungszeit):
     # inserts statistics into out sqlite database
     sqlite_connection = sqlite3.connect('statistics.db')
     try:
         cursor = sqlite_connection.cursor()
         print("Connected to SQLite")
 
-        sqlite_insert_with_param = """INSERT INTO no_batch_simulation
+        sqlite_insert_with_param = f"""INSERT INTO {table_name}
                           (sim_no, unilokk, ruestungszeit) 
                           VALUES (?, ?, ?);"""
 
@@ -607,7 +542,7 @@ class Lernfabrik:
             yield request
             yield self.env.timeout(equipping_time)
             self.process = self.env.process(self.operation(required_machine, operating_time))  # operating machinery
-            env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
+            self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
             yield self.process
 
             self.process = None
@@ -687,7 +622,7 @@ class Lernfabrik:
                     this_amount *= job.get_cumulative_mz()
                     increase_part_count(part_name, math.floor(this_amount))  # add newly created part
 
-                    #decrease_jobs(part_name)
+                    # decrease_jobs(part_name)
 
                     print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
 
@@ -695,7 +630,7 @@ class Lernfabrik:
         yield self.env.process(self.finish_unilokk_creation())
 
         # inserting data into statistics
-        insert_variable_into_table(data_hash, UNILOKK_COUNT, RUESTUNGS_ZEIT)
+        insert_variable_into_table("no_batch_simulation", data_hash, UNILOKK_COUNT, RUESTUNGS_ZEIT)
 
     def simulate(self, order):
         # simulates the production process with increasing orders
@@ -726,16 +661,82 @@ class Lernfabrik:
         yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
-# instantiate object of Lernfabrik class
-SIM_TIME = 86400
-fabric = Lernfabrik(env)
+for i in range(10, 201, 20):
+    # instantiate object of Lernfabrik class
+    env = simpy.Environment()
 
-for i in range(10, 30, 10):
+    # instantiate machines as simpy resources
+    machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
+    machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
+    machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
+    machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+    machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+
+    # machines for part creation
+    OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
+    UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
+    HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
+    RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
+
+    # instantiating jobs
+    # Oberteil creation jobs
+    Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
+    Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
+    Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+    Oberteil_Saegen.set_job_before(None)
+    Oberteil_Saegen.set_job_after(Oberteil_Drehen)
+    Oberteil_Drehen.set_job_before(Oberteil_Saegen)
+    Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
+    Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
+    Oberteil_Fraesen.set_job_after(None)
+    Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
+
+    # Unterteil creation jobs
+    Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
+    Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+    Unterteil_Saegen.set_job_before(None)
+    Unterteil_Saegen.set_job_after(Unterteil_Drehen)
+    Unterteil_Drehen.set_job_before(Unterteil_Saegen)
+    Unterteil_Drehen.set_job_after(None)
+    Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
+
+    # Halteteil creation jobs
+    Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
+    Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+    Halteteil_Saegen.set_job_before(None)
+    Halteteil_Saegen.set_job_after(Halteteil_Drehen)
+    Halteteil_Drehen.set_job_before(Halteteil_Saegen)
+    Halteteil_Drehen.set_job_after(None)
+    Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
+
+    # Ring creation jobs
+    Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
+    Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
+    Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
+    Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+    Ring_Saegen.set_job_before(None)
+    Ring_Saegen.set_job_after(Ring_Drehen)
+    Ring_Drehen.set_job_before(Ring_Saegen)
+    Ring_Drehen.set_job_after(Ring_Senken_1)
+    Ring_Senken_1.set_job_before(Ring_Drehen)
+    Ring_Senken_1.set_job_after(Ring_Senken_2)
+    Ring_Senken_2.set_job_before(Ring_Senken_1)
+    Ring_Senken_2.set_job_after(None)
+    Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
+
+    # Finishing jobs
+    Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+    Fertigstellung.set_job_before(None)
+    Fertigstellung.set_job_after(None)
+    Finishing_Jobs = [Fertigstellung]
+
+    SIM_TIME = 86400
+    fabric = Lernfabrik(env)
     print("order submitted ", i)
     env.process(fabric.simulate(i))
+    env.run(until=SIM_TIME)
     clear_2()
 
-env.run()
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
