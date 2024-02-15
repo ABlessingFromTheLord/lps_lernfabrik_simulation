@@ -423,6 +423,7 @@ class Lernfabrik:
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
+        self.orders = []
 
     # operation
     def operation(self, machine, operating_time):
@@ -740,17 +741,9 @@ order_8 = Order(25, 10)
 order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
-order_list = OrderList()
-order_list.add_order(order_1)
-order_list.add_order(order_2)
-order_list.add_order(order_3)
-order_list.add_order(order_4)
-order_list.add_order(order_5)
-order_list.add_order(order_6)
-order_list.add_order(order_7)
-order_list.add_order(order_8)
-order_list.add_order(order_9)
-order_list.add_order(order_10)
+orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
+
+order_list = OrderList(orders)
 
 prioritized_list = order_list.get_order_by_priority()
 

@@ -3,11 +3,8 @@ from Order import Order
 
 class OrderList:
     # this is how orders are submitted
-    def __init__(self):
-        self.list = []
-
-    def add_order(self, order):
-        self.list.append(order)
+    def __init__(self, order_list):
+        self.list = order_list
 
     def get_order_by_priority(self):
         delivery_dates = []
