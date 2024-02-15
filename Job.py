@@ -1,6 +1,3 @@
-import simpy
-
-
 class Job:
     # definition of how a job made in the simulation looks like
     def __init__(self, name, part_name, duration, machine):

@@ -3,6 +3,8 @@ import simpy
 import numpy
 import sqlite3
 from Job import Job
+from Order import Order
+from OrderList import OrderList
 from pymoo.core.problem import Problem
 import numpy as np
 
@@ -725,6 +727,38 @@ Finishing_Jobs = [Fertigstellung]
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
+# creating order and add them to order list
+# orders could also be created randomly, so random amount and random priority
+order_1 = Order(5, 2)
+order_2 = Order(20, 15)
+order_3 = Order(15, 20)
+order_4 = Order(35, 27)
+order_5 = Order(10, 3)
+order_6 = Order(15, 38)
+order_7 = Order(30, 45)
+order_8 = Order(25, 10)
+order_9 = Order(20, 55)
+order_10 = Order(25, 65)
+
+order_list = OrderList()
+order_list.add_order(order_1)
+order_list.add_order(order_2)
+order_list.add_order(order_3)
+order_list.add_order(order_4)
+order_list.add_order(order_5)
+order_list.add_order(order_6)
+order_list.add_order(order_7)
+order_list.add_order(order_8)
+order_list.add_order(order_9)
+order_list.add_order(order_10)
+
+prioritized_list = order_list.get_order_by_priority()
+
+for order in prioritized_list:
+    print(order.delivery_date)
+
+
+# submitting order
 parts_needed = submit_order([1, 3, 4, 2, 6, 1, 3])
 print(parts_needed)
 execution_sequence = amount_of_runs(parts_needed)
@@ -744,11 +778,4 @@ print("RING: ", RING_COUNT, "\n")
 print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
 print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
-
-parts_needed = submit_order([1, 3, 4, 2])
-print("\n", parts_needed)
-execution_sequence = amount_of_runs(parts_needed)
-print("execution sequence", execution_sequence)
-execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-print("execution sequence by parts", execution_sequence_in_parts)
 
