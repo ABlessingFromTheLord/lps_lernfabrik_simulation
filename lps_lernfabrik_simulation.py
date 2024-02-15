@@ -2,19 +2,9 @@ import math
 import simpy
 import numpy
 import sqlite3
-import itertools
 from Job import Job
 from pymoo.core.problem import Problem
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.optimize import minimize
 import numpy as np
-# disabling redundant warning
-from pymoo.config import Config
-
-Config.warnings['not_compiled'] = False
-
-# simpy environment declaration
-
 
 # global variables
 PARTS_MADE = 0
@@ -60,9 +50,6 @@ RUESTUNGS_ZEIT = 0
 # unilokk created
 UNILOKK_COUNT = 0
 
-# best permutation and minimal ruestungszeit
-PERMUTATION = None
-MINIMAL_RUESTUNGSZEIT = 0
 
 # global helper functions
 def get_machines_for_part(part_name):
@@ -227,6 +214,65 @@ def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
             print("The SQLite connection is closed")
 
 
+def amount_of_runs(orders):
+    # returns amount of runs needed to fulfill the order
+    # it depends on how much order is left and how much is needed
+    # at the beginning nothing is produced so nothing is left
+
+    global OBERTEIL_COUNT
+    global UNTERTEIL_COUNT
+    global HALTETEIL_COUNT
+    global RING_COUNT
+
+    # if we are just starting
+    if OBERTEIL_COUNT == 0 and UNTERTEIL_COUNT == 0 and HALTETEIL_COUNT == 0 and RING_COUNT == 0:
+        for order_instance in range(len(orders)):
+            if orders[order_instance] == 0:
+                orders[order_instance] = 0
+            else:
+                match order_instance:
+                    case 0:
+                        orders[order_instance] = math.ceil(orders[order_instance] / 17)
+                    case 1:
+                        orders[order_instance] = math.ceil(orders[order_instance] / 11)
+                    case 2:
+                        orders[order_instance] = math.ceil(orders[order_instance] / 49)
+                    case 3:
+                        orders[order_instance] = math.ceil(orders[order_instance] / 97)
+
+    # we already produced and have some leftovers
+    else:
+        # if the leftovers suffice, done produce more
+        if OBERTEIL_COUNT > orders[0]:
+            orders[0] = 0
+        if UNTERTEIL_COUNT > orders[1]:
+            orders[1] = 0
+        if HALTETEIL_COUNT > orders[2]:
+            orders[2] = 0
+        if RING_COUNT > orders[3]:
+            orders[3] = 0
+
+        # else produce needed
+        # to reduce order by what is available
+        for order_instance in range(len(orders)):
+            if orders[order_instance] > 0:
+                match order_instance:
+                    case 0:
+                        orders[order_instance] -= OBERTEIL_COUNT
+                        orders[order_instance] = math.ceil(orders[order_instance] / 17)
+                    case 1:
+                        orders[order_instance] -= UNTERTEIL_COUNT
+                        orders[order_instance] = math.ceil(orders[order_instance] / 11)
+                    case 2:
+                        orders[order_instance] -= HALTETEIL_COUNT
+                        orders[order_instance] = math.ceil(orders[order_instance] / 49)
+                    case 3:
+                        orders[order_instance] -= RING_COUNT
+                        orders[order_instance] = math.ceil(orders[order_instance] / 97)
+
+    return orders
+
+
 def get_parts_by_sequence(sequence):
     # returns part names in the amount their machines are needed to be executed
     # to get a batch that can fulfill an order
@@ -283,6 +329,8 @@ def submit_order(orders):
     global RING_ORDER
     RING_ORDER = total_parts
 
+    return [OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]
+
 
 def clear_stats():
     global OBERTEIL_COUNT
@@ -320,7 +368,7 @@ def adjust(genes):
 # submit order
 
 # submit order and run algorithm
-submit_order([1, 3, 4, 2])  # each index is a customer number
+# submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
 
 
 # optimization problem definition
@@ -557,7 +605,7 @@ class Lernfabrik:
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
 
-                print("unilokk ", n, " was created at ", self.env.now)
+                print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
 
             else:
@@ -593,7 +641,6 @@ class Lernfabrik:
                 job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
                 if all_jobs_completed_for_part(part_name):
-                    print("gets here")
                     #  all machines required to produce a part have been operated
                     # part is created
                     this_amount *= job.get_cumulative_mz()
@@ -601,162 +648,92 @@ class Lernfabrik:
 
                     # decrease_jobs(part_name)
 
-                    print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now)
+                    print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
 
-    def simulate(self, order):
-        # simulates the production process with increasing orders
-        submit_orders(order)
 
-        # executing the optimization algorithm
-        # instantiating problem and algorithm
-        problem = ExecutionAmounts()
-        algorithm = NSGA2(
-            pop_size=100,
-            n_offsprings=50,
-            eliminate_duplicates=True
-        )
+# instantiate object of Lernfabrik class
+env = simpy.Environment()
 
-        # returns the sequence to execute machines to fulfill current order
-        res = minimize(problem,
-                       algorithm,
-                       ('n_gen', 100),
-                       seed=1,
-                       verbose=False)
+# instantiate machines as simpy resources
+machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
+machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
+machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
+machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
-        # result for execution sequence
-        execution_sequence = adjust(res.X)
-        execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+# machines for part creation
+OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
+UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
+HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
+RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
 
-        print("Best solution found: %s" % execution_sequence_in_parts)
+# instantiating jobs
+# Oberteil creation jobs
+Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
+Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
+Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+Oberteil_Saegen.set_job_before(None)
+Oberteil_Saegen.set_job_after(Oberteil_Drehen)
+Oberteil_Drehen.set_job_before(Oberteil_Saegen)
+Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
+Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
+Oberteil_Fraesen.set_job_after(None)
+Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
-        yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
+# Unterteil creation jobs
+Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
+Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+Unterteil_Saegen.set_job_before(None)
+Unterteil_Saegen.set_job_after(Unterteil_Drehen)
+Unterteil_Drehen.set_job_before(Unterteil_Saegen)
+Unterteil_Drehen.set_job_after(None)
+Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
+# Halteteil creation jobs
+Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+Halteteil_Saegen.set_job_before(None)
+Halteteil_Saegen.set_job_after(Halteteil_Drehen)
+Halteteil_Drehen.set_job_before(Halteteil_Saegen)
+Halteteil_Drehen.set_job_after(None)
+Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
-# optimise problem
-# executing the optimization algorithm
-# instantiating problem and algorithm
-problem = ExecutionAmounts()
-algorithm = NSGA2(
-    pop_size=100,
-    n_offsprings=50,
-    eliminate_duplicates=True
-)
+# Ring creation jobs
+Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
+Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
+Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
+Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+Ring_Saegen.set_job_before(None)
+Ring_Saegen.set_job_after(Ring_Drehen)
+Ring_Drehen.set_job_before(Ring_Saegen)
+Ring_Drehen.set_job_after(Ring_Senken_1)
+Ring_Senken_1.set_job_before(Ring_Drehen)
+Ring_Senken_1.set_job_after(Ring_Senken_2)
+Ring_Senken_2.set_job_before(Ring_Senken_1)
+Ring_Senken_2.set_job_after(None)
+Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
 
-# returns the sequence to execute machines to fulfill current order
-res = minimize(problem,
-               algorithm,
-               ('n_gen', 100),
-               seed=1,
-               verbose=False)
+# Finishing jobs
+Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+Fertigstellung.set_job_before(None)
+Fertigstellung.set_job_after(None)
+Finishing_Jobs = [Fertigstellung]
 
-# result for execution sequence
-execution_sequence = adjust(res.X)
+SIM_TIME = 86400
+fabric = Lernfabrik(env)
+
+parts_needed = submit_order([1, 3, 4, 2, 6, 1, 3])
+print(parts_needed)
+execution_sequence = amount_of_runs(parts_needed)
+print("execution sequence", execution_sequence)
 execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+print("execution sequence by parts", execution_sequence_in_parts)
 
-print("Best solution found: %s" % execution_sequence_in_parts)
-
-# permutations of list
-permuted_list = list(itertools.permutations(execution_sequence_in_parts))
-
-for list_index in range(len(permuted_list)):
-    permuted_list[list_index] = list(permuted_list[list_index])
-
-print(permuted_list)
-print(len(permuted_list))
-
-list_of_minimals = []
-
-for i in range(len(permuted_list)):
-    # instantiate object of Lernfabrik class
-    env = simpy.Environment()
-
-    # instantiate machines as simpy resources
-    machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
-    machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
-    machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
-    machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
-    machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
-
-    # machines for part creation
-    OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
-    UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
-    HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-    RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
-
-    # instantiating jobs
-    # Oberteil creation jobs
-    Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-    Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-    Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
-    Oberteil_Saegen.set_job_before(None)
-    Oberteil_Saegen.set_job_after(Oberteil_Drehen)
-    Oberteil_Drehen.set_job_before(Oberteil_Saegen)
-    Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
-    Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
-    Oberteil_Fraesen.set_job_after(None)
-    Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
-
-    # Unterteil creation jobs
-    Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-    Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
-    Unterteil_Saegen.set_job_before(None)
-    Unterteil_Saegen.set_job_after(Unterteil_Drehen)
-    Unterteil_Drehen.set_job_before(Unterteil_Saegen)
-    Unterteil_Drehen.set_job_after(None)
-    Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
-
-    # Halteteil creation jobs
-    Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-    Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
-    Halteteil_Saegen.set_job_before(None)
-    Halteteil_Saegen.set_job_after(Halteteil_Drehen)
-    Halteteil_Drehen.set_job_before(Halteteil_Saegen)
-    Halteteil_Drehen.set_job_after(None)
-    Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
-
-    # Ring creation jobs
-    Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-    Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-    Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-    Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
-    Ring_Saegen.set_job_before(None)
-    Ring_Saegen.set_job_after(Ring_Drehen)
-    Ring_Drehen.set_job_before(Ring_Saegen)
-    Ring_Drehen.set_job_after(Ring_Senken_1)
-    Ring_Senken_1.set_job_before(Ring_Drehen)
-    Ring_Senken_1.set_job_after(Ring_Senken_2)
-    Ring_Senken_2.set_job_before(Ring_Senken_1)
-    Ring_Senken_2.set_job_after(None)
-    Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
-
-    # Finishing jobs
-    Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
-    Fertigstellung.set_job_before(None)
-    Fertigstellung.set_job_after(None)
-    Finishing_Jobs = [Fertigstellung]
-
-    SIM_TIME = 86400
-    fabric = Lernfabrik(env)
-    env.process(fabric.fulfill_orders(permuted_list[i]))
-    env.run(until=SIM_TIME)
-    print("\n", i, "st simulation had ", RUESTUNGS_ZEIT, " Ruestungszeit\n")
-
-    if i == 0:
-        MINIMAL_RUESTUNGSZEIT = RUESTUNGS_ZEIT
-    else:
-        if RUESTUNGS_ZEIT < MINIMAL_RUESTUNGSZEIT:
-            MINIMAL_RUESTUNGSZEIT = RUESTUNGS_ZEIT
-            PERMUTATION = permuted_list[i]
-        if RUESTUNGS_ZEIT <= 9300:
-            list_of_minimals.append(permuted_list[i])
-
-    clear_stats()
-
-print("\n best permutation is ", PERMUTATION, " with time ", MINIMAL_RUESTUNGSZEIT, "\n")
-print(list_of_minimals)
+env.process(fabric.fulfill_orders(execution_sequence_in_parts))
+env.run(until=SIM_TIME)
 
 # analysis and results
 print("\nOBERTEIL: ", OBERTEIL_COUNT)
@@ -767,3 +744,11 @@ print("RING: ", RING_COUNT, "\n")
 print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
 print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
 print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
+
+parts_needed = submit_order([1, 3, 4, 2])
+print("\n", parts_needed)
+execution_sequence = amount_of_runs(parts_needed)
+print("execution sequence", execution_sequence)
+execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+print("execution sequence by parts", execution_sequence_in_parts)
+
