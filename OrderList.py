@@ -11,7 +11,7 @@ class OrderList:
     def receive_order(self, order_list):
         self.list = order_list
 
-    def get_order_by_priority(self):
+    def order_by_priority(self):
         delivery_dates = []
         new_list = []
 

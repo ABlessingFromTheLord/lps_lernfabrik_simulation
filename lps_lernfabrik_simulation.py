@@ -619,7 +619,7 @@ class Lernfabrik:
 
         # receiving and prioritising orders
         self.orders.receive_order(orders)
-        prioritized_list = self.orders.get_order_by_priority()
+        prioritized_list = self.orders.order_by_priority()
         parts_needed = get_parts_needed(prioritized_list)
 
         execution_sequence = amount_of_runs(parts_needed)
