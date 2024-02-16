@@ -156,8 +156,8 @@ def get_quality_grade(machine):
         return 1
 
 
-def orders_fulfilled(orders, unilokk):
-    return (unilokk / orders) * 100
+def orders_fulfilled(orders_received, unilokk):
+    return (unilokk / orders_received) * 100
 
 
 def get_output_per_part(part_name):
@@ -216,7 +216,7 @@ def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
             print("The SQLite connection is closed")
 
 
-def amount_of_runs(orders):
+def amount_of_runs(order_list):
     # returns amount of runs needed to fulfill the order
     # it depends on how much order is left and how much is needed
     # at the beginning nothing is produced so nothing is left
@@ -228,51 +228,51 @@ def amount_of_runs(orders):
 
     # if we are just starting
     if OBERTEIL_COUNT == 0 and UNTERTEIL_COUNT == 0 and HALTETEIL_COUNT == 0 and RING_COUNT == 0:
-        for order_instance in range(len(orders)):
-            if orders[order_instance] == 0:
-                orders[order_instance] = 0
+        for order_instance in range(len(order_list)):
+            if order_list[order_instance] == 0:
+                order_list[order_instance] = 0
             else:
                 match order_instance:
                     case 0:
-                        orders[order_instance] = math.ceil(orders[order_instance] / 17)
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 17)
                     case 1:
-                        orders[order_instance] = math.ceil(orders[order_instance] / 11)
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 11)
                     case 2:
-                        orders[order_instance] = math.ceil(orders[order_instance] / 49)
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 49)
                     case 3:
-                        orders[order_instance] = math.ceil(orders[order_instance] / 97)
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
 
     # we already produced and have some leftovers
     else:
         # if the leftovers suffice, done produce more
-        if OBERTEIL_COUNT > orders[0]:
-            orders[0] = 0
-        if UNTERTEIL_COUNT > orders[1]:
-            orders[1] = 0
-        if HALTETEIL_COUNT > orders[2]:
-            orders[2] = 0
-        if RING_COUNT > orders[3]:
-            orders[3] = 0
+        if OBERTEIL_COUNT > order_list[0]:
+            order_list[0] = 0
+        if UNTERTEIL_COUNT > order_list[1]:
+            order_list[1] = 0
+        if HALTETEIL_COUNT > order_list[2]:
+            order_list[2] = 0
+        if RING_COUNT > order_list[3]:
+            order_list[3] = 0
 
         # else produce needed
         # to reduce order by what is available
-        for order_instance in range(len(orders)):
-            if orders[order_instance] > 0:
+        for order_instance in range(len(order_list)):
+            if order_list[order_instance] > 0:
                 match order_instance:
                     case 0:
-                        orders[order_instance] -= OBERTEIL_COUNT
-                        orders[order_instance] = math.ceil(orders[order_instance] / 17)
+                        order_list[order_instance] -= OBERTEIL_COUNT
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 17)
                     case 1:
-                        orders[order_instance] -= UNTERTEIL_COUNT
-                        orders[order_instance] = math.ceil(orders[order_instance] / 11)
+                        order_list[order_instance] -= UNTERTEIL_COUNT
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 11)
                     case 2:
-                        orders[order_instance] -= HALTETEIL_COUNT
-                        orders[order_instance] = math.ceil(orders[order_instance] / 49)
+                        order_list[order_instance] -= HALTETEIL_COUNT
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 49)
                     case 3:
-                        orders[order_instance] -= RING_COUNT
-                        orders[order_instance] = math.ceil(orders[order_instance] / 97)
+                        order_list[order_instance] -= RING_COUNT
+                        order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
 
-    return orders
+    return order_list
 
 
 def get_parts_by_sequence(sequence):
@@ -314,13 +314,13 @@ def submit_orders(order):
     RING_ORDER = order
 
 
-def submit_order(orders):
+def get_parts_needed(orders_list):
     # receives orders and sets the universal variables OBERTEIL_ORDER,
     # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
     total_parts = 0
 
-    for order in orders:
-        total_parts += order
+    for order in orders_list:
+        total_parts += order.amount
 
     global OBERTEIL_ORDER
     OBERTEIL_ORDER = total_parts
@@ -423,7 +423,7 @@ class Lernfabrik:
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
-        self.orders = []
+        self.orders = OrderList()  # custom data type to receive orders, initially Null
 
     # operation
     def operation(self, machine, operating_time):
@@ -614,13 +614,23 @@ class Lernfabrik:
             else:
                 break
 
-    def fulfill_orders(self, sequence):
+    def fulfill_orders(self, orders):
         # the whole process from part creation to order fulfillment
+
+        # receiving and prioritising orders
+        self.orders.receive_order(orders)
+        prioritized_list = self.orders.get_order_by_priority()
+        parts_needed = get_parts_needed(prioritized_list)
+
+        execution_sequence = amount_of_runs(parts_needed)
+        print("execution sequence", execution_sequence)
+        execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+        print("execution sequence by parts", execution_sequence_in_parts)
 
         # parts creation
         jobs = []  # array of jobs
 
-        for part in sequence:
+        for part in execution_sequence_in_parts:
             jobs_for_part = get_jobs_for_part(part)
 
             # unpacking jobs into one list full of all the jobs
@@ -743,23 +753,23 @@ order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 
-order_list = OrderList(orders)
+#order_list = OrderList(orders)
 
-prioritized_list = order_list.get_order_by_priority()
+#prioritized_list = order_list.get_order_by_priority()
 
-for order in prioritized_list:
-    print(order.delivery_date)
+#for order in prioritized_list:
+    #print(order.delivery_date)
 
 
 # submitting order
-parts_needed = submit_order([1, 3, 4, 2, 6, 1, 3])
-print(parts_needed)
-execution_sequence = amount_of_runs(parts_needed)
-print("execution sequence", execution_sequence)
-execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-print("execution sequence by parts", execution_sequence_in_parts)
+#parts_needed = submit_order([1, 3, 4, 2, 6, 1, 3])
+#print(parts_needed)
+#execution_sequence = amount_of_runs(parts_needed)
+#print("execution sequence", execution_sequence)
+#execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+#print("execution sequence by parts", execution_sequence_in_parts)
 
-env.process(fabric.fulfill_orders(execution_sequence_in_parts))
+env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
 # analysis and results

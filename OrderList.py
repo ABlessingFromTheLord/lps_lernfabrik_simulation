@@ -3,7 +3,12 @@ from Order import Order
 
 class OrderList:
     # this is how orders are submitted
-    def __init__(self, order_list):
+    # first you receive the orders by calling receive_orders, since object is instantiated with None
+    # then generate prioritized list by calling get_order_by_priority
+    def __init__(self):
+        self.list = None
+
+    def receive_order(self, order_list):
         self.list = order_list
 
     def get_order_by_priority(self):
