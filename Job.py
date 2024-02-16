@@ -1,6 +1,6 @@
 class Job:
     # definition of how a job made in the simulation looks like
-    def __init__(self, name, part_name, duration, machine):
+    def __init__(self, name, part_name, duration, machine, job_id):
         self.name = name
         self.part_name = part_name
         self.duration = duration
@@ -9,6 +9,7 @@ class Job:
         self.machine_required = machine
         self.completed = 0
         self.cumulative_mz = None
+        self.job_id = job_id
 
     # getters
     def get_name(self):

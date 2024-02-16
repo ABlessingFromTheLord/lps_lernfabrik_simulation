@@ -722,9 +722,9 @@ RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz
 
 # instantiating jobs
 # Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa, 1)
+Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200, 2)
+Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12, 3)
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
 Oberteil_Drehen.set_job_before(Oberteil_Saegen)
@@ -734,8 +734,8 @@ Oberteil_Fraesen.set_job_after(None)
 Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa, 4)
+Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200, 5)
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
 Unterteil_Drehen.set_job_before(Unterteil_Saegen)
@@ -743,8 +743,8 @@ Unterteil_Drehen.set_job_after(None)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa, 6)
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200, 7)
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
 Halteteil_Drehen.set_job_before(Halteteil_Saegen)
@@ -752,10 +752,10 @@ Halteteil_Drehen.set_job_after(None)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa, 8)
+Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200, 9)
+Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz, 10)
+Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200, 11)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Drehen.set_job_before(Ring_Saegen)
