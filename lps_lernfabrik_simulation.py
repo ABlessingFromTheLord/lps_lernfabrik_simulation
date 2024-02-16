@@ -46,6 +46,8 @@ UNTERTEIL_COUNT = 0
 HALTETEIL_COUNT = 0
 RING_COUNT = 0
 
+ORDERS_FULFILLED = 0
+
 # ruestungszeit
 RUESTUNGS_ZEIT = 0
 
@@ -226,6 +228,12 @@ def amount_of_runs(order_list):
     global HALTETEIL_COUNT
     global RING_COUNT
 
+    # showing remaining parts from previous execution
+    print("\nOBERTEIL: ", OBERTEIL_COUNT)
+    print("UNTERTEIL: ", UNTERTEIL_COUNT)
+    print("HALTETEIL: ", HALTETEIL_COUNT)
+    print("RING: ", RING_COUNT, "\n")
+
     # if we are just starting
     if OBERTEIL_COUNT == 0 and UNTERTEIL_COUNT == 0 and HALTETEIL_COUNT == 0 and RING_COUNT == 0:
         for order_instance in range(len(order_list)):
@@ -314,22 +322,18 @@ def submit_orders(order):
     RING_ORDER = order
 
 
-def get_parts_needed(orders_list):
+def get_parts_needed(order):
     # receives orders and sets the universal variables OBERTEIL_ORDER,
     # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
-    total_parts = 0
-
-    for order in orders_list:
-        total_parts += order.amount
 
     global OBERTEIL_ORDER
-    OBERTEIL_ORDER = total_parts
+    OBERTEIL_ORDER = order
     global UNTERTEIL_ORDER
-    UNTERTEIL_ORDER = total_parts
+    UNTERTEIL_ORDER = order
     global HALTETEIL_ORDER
-    HALTETEIL_ORDER = total_parts
+    HALTETEIL_ORDER = order
     global RING_ORDER
-    RING_ORDER = total_parts
+    RING_ORDER = order
 
     return [OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]
 
@@ -587,40 +591,17 @@ class Lernfabrik:
         if job.job_before is not None and job.job_before.get_completed():
             job.set_cumulative_mz(job.get_cumulative_mz() * job.job_before.get_cumulative_mz())
 
-    def finish_unilokk_creation(self):
-        # simulates the Kleben, Montage, Pruefen and Verpacken processes
-        # after parts have been created
-        print("\nFinishing process has started")
+    def fulfill_order(self, order_number, order):
+        # received and order and fulfills it
+        global UNILOKK_COUNT
+        remaining_unilokk = UNILOKK_COUNT
+        UNILOKK_COUNT = 0
+        working_order = order.amount - remaining_unilokk  # actual order needed to be produced
 
-        n = 1
-        # then assemble them into Unilokk
-        while True:
-            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+        print("leftover Unilokk ", remaining_unilokk)
 
-                # decrement for the parts used above to create a whole Unilokk
-                decrease_part_count(OBERTEIL)
-                decrease_part_count(UNTERTEIL)
-                decrease_part_count(HALTETEIL)
-                decrease_part_count(RING)
-
-                # increase Unilokk count for the one that is created
-                global UNILOKK_COUNT
-                UNILOKK_COUNT = UNILOKK_COUNT + 1
-
-                print("unilokk ", n, " was created at ", self.env.now, "\n")
-                n = n + 1
-
-            else:
-                break
-
-    def fulfill_orders(self, orders):
-        # the whole process from part creation to order fulfillment
-
-        # receiving and prioritising orders
-        self.orders.receive_order(orders)
-        prioritized_list = self.orders.order_by_priority()
-        parts_needed = get_parts_needed(prioritized_list)
+        parts_needed = get_parts_needed(working_order)
+        print(parts_needed)
 
         execution_sequence = amount_of_runs(parts_needed)
         print("execution sequence", execution_sequence)
@@ -628,7 +609,7 @@ class Lernfabrik:
         print("execution sequence by parts", execution_sequence_in_parts)
 
         # parts creation
-        jobs = []  # array of jobs
+        jobs = []  # array of jobs needed to fulfill this order
 
         for part in execution_sequence_in_parts:
             jobs_for_part = get_jobs_for_part(part)
@@ -665,6 +646,57 @@ class Lernfabrik:
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
+
+        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+
+        # fulfilling order
+        if UNILOKK_COUNT >= working_order:
+            UNILOKK_COUNT -= working_order
+            global ORDERS_FULFILLED
+            ORDERS_FULFILLED += 1
+            print("Order fulfilled completely\n\n")
+        else:
+            print("Order unfulfilled\n\n")
+
+    def finish_unilokk_creation(self):
+        # simulates the Kleben, Montage, Pruefen and Verpacken processes
+        # after parts have been created
+        print("\nFinishing process has started")
+
+        n = 1
+        # then assemble them into Unilokk
+        while True:
+            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+
+                # decrement for the parts used above to create a whole Unilokk
+                decrease_part_count(OBERTEIL)
+                decrease_part_count(UNTERTEIL)
+                decrease_part_count(HALTETEIL)
+                decrease_part_count(RING)
+
+                # increase Unilokk count for the one that is created
+                global UNILOKK_COUNT
+                UNILOKK_COUNT = UNILOKK_COUNT + 1
+
+                print("unilokk ", n, " was created at ", self.env.now, "\n")
+                n = n + 1
+
+            else:
+                break
+
+    def fulfill_orders(self, orders):
+        # the whole process from part creation to order fulfillment
+
+        # receiving and prioritising orders
+        self.orders.receive_order(orders)
+        prioritized_list = self.orders.order_by_priority()
+
+        for order_number in range(len(prioritized_list)):
+            yield self.env.process(self.fulfill_order(order_number + 1, prioritized_list[order_number]))
+
+        print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
 
 # instantiate object of Lernfabrik class
@@ -756,12 +788,5 @@ env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
 # analysis and results
-print("\nOBERTEIL: ", OBERTEIL_COUNT)
-print("UNTERTEIL: ", UNTERTEIL_COUNT)
-print("HALTETEIL: ", HALTETEIL_COUNT)
-print("RING: ", RING_COUNT, "\n")
-
-print("required: ", OBERTEIL_ORDER, " produced: ", UNILOKK_COUNT)
-print("orders fulfilled: ", orders_fulfilled(OBERTEIL_ORDER, UNILOKK_COUNT), "%")
-print("total ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
+print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
 
