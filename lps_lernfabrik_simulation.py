@@ -752,23 +752,6 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-
-#order_list = OrderList(orders)
-
-#prioritized_list = order_list.get_order_by_priority()
-
-#for order in prioritized_list:
-    #print(order.delivery_date)
-
-
-# submitting order
-#parts_needed = submit_order([1, 3, 4, 2, 6, 1, 3])
-#print(parts_needed)
-#execution_sequence = amount_of_runs(parts_needed)
-#print("execution sequence", execution_sequence)
-#execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-#print("execution sequence by parts", execution_sequence_in_parts)
-
 env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
