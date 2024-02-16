@@ -618,6 +618,11 @@ class Lernfabrik:
             for job in jobs_for_part:
                 jobs.append(job)
 
+        print("\n")
+        for job in jobs:
+            print("jobs needed ", job.get_name())
+        print("\n")
+
         # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
 
         # why running loop again? because an optimizer will bee ran before here to determine the best
@@ -767,7 +772,7 @@ Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
-SIM_TIME = 86400
+SIM_TIME = 86400 * 2
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
