@@ -442,17 +442,30 @@ def get_parallelization(jobs):
     # parallelized. Only jobs in different inner arrays can be run consequently
 
     parallel_jobs = []
+    temp = []
+    n = len(jobs)
 
-    for job_1 in jobs:
+    job_index_1 = 0
+    while job_index_1 < n:
+        job_1 = jobs[job_index_1]
         machine = job_1.get_machine_required()
-        temp = [job_1]
-        jobs.remove(job_1)
+        if job_1 not in temp:
+            temp.append(job_1)
+            jobs.remove(job_1)
+            n -= 1
 
-        for job_2 in jobs:
-            if job_2.get_machine_required() == machine:
-                temp.append(job_2)
-                jobs.remove(job_2)
-        parallel_jobs.append(temp)
+            job_2_index = 0
+            while job_2_index < n:
+                if jobs[job_2_index].get_machine_required() == machine:
+                    temp.append(jobs[job_2_index])
+                    jobs.remove(jobs[job_2_index])
+                    n -= 1
+                else:
+                    job_2_index += 1
+            parallel_jobs.append(temp.copy())
+            temp.clear()
+        else:
+            job_index_1 += 1
 
     return parallel_jobs
 
@@ -768,22 +781,31 @@ class Lernfabrik:
             for job in jobs_for_part:
                 jobs.append(job)
 
-        print("\n")
+        print("\nBefore bundling:")
         for job in jobs:
-            print("jobs needed ", job.get_name())
+            print(job.get_name())
         print("\n")
 
         # TODO: put all this in a method called optimize
         # bundling up similar jobs together to minimize Ruestungszeit
         jobs.sort(key=get_job_keys)
 
-        print("\n")
+        print("\n After bundling:")
         for job in jobs:
-            print("jobs needed ", job.get_name())
+            print(job.get_name())
         print("\n")
 
-        parallelized_jobs = get_parallelization(jobs)
-        print(parallelized_jobs)
+        jobs_copy = jobs[:]  # shallow copy of the list
+
+        parallelized_jobs = get_parallelization(jobs_copy)
+
+        print("parallelization: ")
+        for thing in parallelized_jobs:
+            print("\njobs for machine ", thing[0].get_machine_required())
+            if type(thing) == list:
+                for thin_2 in thing:
+                    print(thin_2.get_name())
+        print("\n")
 
         # getting the equipping times as matrix for the optimization
         print(get_equipping_times_for_jobs(jobs))
