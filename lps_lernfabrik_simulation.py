@@ -590,11 +590,13 @@ class Lernfabrik:
     def do_job(self, job, part_name):
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
-        self.next_creating = part_name
-
         required_machine = job.get_machine_required()
         equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
+
+        if required_machine == machine_gz200:
+            self.next_creating = part_name
+
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
 
