@@ -1,3 +1,4 @@
+import itertools
 import math
 import simpy
 import numpy
@@ -337,6 +338,125 @@ def get_job_keys(job):
             return 11
 
 
+def get_equipping_times_for_jobs(jobs_list):
+    # returns the equipping times of one job to the next as a list
+    # used in optimization of Ruestungszeit
+    ruestungszeiten = []
+    previously_done = None
+
+    for job in jobs_list:
+        if job.get_machine_required() == machine_fz12:
+            ruestungszeiten.append(30 * 60)
+        elif job.get_machine_required() == machine_jaespa:
+            ruestungszeiten.append(0)
+        elif job.get_machine_required() == machine_gz200:
+            match job.get_part_name():
+                case "Oberteil":
+                    match previously_done:
+                        case None:
+                            previously_done = "Oberteil"
+                            ruestungszeiten.append(0)
+                        case "Oberteil":
+                            previously_done = "Oberteil"
+                            ruestungszeiten.append(0)
+                        case "Unterteil":
+                            previously_done = "Oberteil"
+                            ruestungszeiten.append(45 * 60)
+                        case "Halteteil":
+                            previously_done = "Oberteil"
+                            ruestungszeiten.append(40 * 60)
+                        case "Ring":
+                            previously_done = "Oberteil"
+                            ruestungszeiten.append(45 * 60)
+
+                case "Unterteil":
+                    match previously_done:
+                        case None:
+                            previously_done = "Unterteil"
+                            ruestungszeiten.append(0)
+                        case "Oberteil":
+                            previously_done = "Unterteil"
+                            ruestungszeiten.append(45 * 60)
+                        case "Unterteil":
+                            previously_done = "Unterteil"
+                            ruestungszeiten.append(0)
+                        case "Halteteil":
+                            previously_done = "Unterteil"
+                            ruestungszeiten.append(40 * 60)
+                        case "Ring":
+                            previously_done = "Unterteil"
+                            ruestungszeiten.append(45 * 60)
+
+                case "Halteteil":
+                    match previously_done:
+                        case None:
+                            previously_done = "Halteteil"
+                            ruestungszeiten.append(0)
+                        case "Oberteil":
+                            previously_done = "Halteteil"
+                            ruestungszeiten.append(40 * 60)
+                        case "Unterteil":
+                            previously_done = "Halteteil"
+                            ruestungszeiten.append(40 * 60)
+                        case "Halteteil":
+                            previously_done = "Halteteil"
+                            ruestungszeiten.append(0)
+                        case "Ring":
+                            previously_done = "Halteteil"
+                            ruestungszeiten.append(45 * 60)
+
+                case "Ring":
+                    match previously_done:
+                        case None:
+                            previously_done = "Ring"
+                            ruestungszeiten.append(0)
+                        case "Oberteil":
+                            previously_done = "Ring"
+                            ruestungszeiten.append(45 * 60)
+                        case "Unterteil":
+                            previously_done = "Ring"
+                            ruestungszeiten.append(45 * 60)
+                        case "Halteteil":
+                            previously_done = "Ring"
+                            ruestungszeiten.append(45 * 60)
+                        case "Ring":
+                            previously_done = "Ring"
+                            ruestungszeiten.append(0)
+
+    return ruestungszeiten
+
+
+def is_runnable(jobs_list):
+    # checks if a given job execution sequence is executable and has no failed dependency
+    # ie, for execution of job i, there is a job k in [0,..., i-1] which has to be
+    # executed before this
+    for i in range(len(jobs_list)):
+        if jobs_list[i].get_job_before() is not None and jobs_list.index(jobs_list[i].get_job_before()) > i:
+            return False
+        return True
+
+
+def get_parallelization(jobs):
+    # returns an array of arrays that indicate the jobs that can be executed in parallel
+    # jobs in the same inner array need the same machine to be done, so they cannot be
+    # parallelized. Only jobs in different inner arrays can be run consequently
+
+    parallel_jobs = []
+
+    for job_1 in jobs:
+        machine = job_1.get_machine_required()
+        temp = [job_1]
+        jobs.remove(job_1)
+
+        for job_2 in jobs:
+            if job_2.get_machine_required() == machine:
+                temp.append(job_2)
+                jobs.remove(job_2)
+        parallel_jobs.append(temp)
+
+    return parallel_jobs
+
+
 def submit_orders(order):
     # receives orders and sets the universal variables OBERTEIL_ORDER,
     # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
@@ -590,11 +710,13 @@ class Lernfabrik:
     def do_job(self, job, part_name):
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
-        self.next_creating = part_name
-
         required_machine = job.get_machine_required()
         equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
+
+        if required_machine == machine_gz200:
+            self.next_creating = part_name
+
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
 
@@ -651,6 +773,7 @@ class Lernfabrik:
             print("jobs needed ", job.get_name())
         print("\n")
 
+        # TODO: put all this in a method called optimize
         # bundling up similar jobs together to minimize Ruestungszeit
         jobs.sort(key=get_job_keys)
 
@@ -658,6 +781,12 @@ class Lernfabrik:
         for job in jobs:
             print("jobs needed ", job.get_name())
         print("\n")
+
+        parallelized_jobs = get_parallelization(jobs)
+        print(parallelized_jobs)
+
+        # getting the equipping times as matrix for the optimization
+        print(get_equipping_times_for_jobs(jobs))
 
         # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
 
@@ -727,11 +856,11 @@ class Lernfabrik:
             else:
                 break
 
-    def fulfill_orders(self, orders):
+    def fulfill_orders(self, orders_list):
         # the whole process from part creation to order fulfillment
 
         # receiving and prioritising orders
-        self.orders.receive_order(orders)
+        self.orders.receive_order(orders_list)
         prioritized_list = self.orders.order_by_priority()
 
         for order_number in range(len(prioritized_list)):
@@ -830,4 +959,3 @@ env.run(until=SIM_TIME)
 
 # analysis and results
 print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
-
