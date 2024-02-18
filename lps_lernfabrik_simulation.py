@@ -159,10 +159,6 @@ def get_quality_grade(machine):
         return 1
 
 
-def orders_fulfilled(orders_received, unilokk):
-    return (unilokk / orders_received) * 100
-
-
 def get_output_per_part(part_name):
     # returns amount of parts created from a 3000mm long rod of raw material
     match part_name:
@@ -282,6 +278,12 @@ def amount_of_runs(order_list):
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
 
     return order_list
+
+
+def get_degree(job):
+    # returns degree of a job
+    # TODO: explain what a degree is
+    return job.get_degree()
 
 
 def get_parts_by_sequence(sequence):
@@ -426,6 +428,34 @@ def get_equipping_times_for_jobs(jobs_list):
     return ruestungszeiten
 
 
+def fill_with_zeroes(array, n):
+    # returns an array appended with zeroes to the length n
+    # useful so all arrays have same dimension later in optimization algorithm
+    while len(array) < n:
+        array.append(0)
+    return array
+
+
+def sort_by_minimal_runtime(job_list):
+    # return the job execution sequence with minimal Ruestungszeit
+    if len(job_list) <= 1:
+        return job_list
+
+    permuted_list = list(itertools.permutations(job_list))
+    min_run = []
+    min_time = None
+
+    for i in range(len(permuted_list)):
+        permuted_list[i] = list(permuted_list[i])  # converting elements to list from tuples
+        if i == 0:
+            min_time = sum(get_equipping_times_for_jobs(permuted_list[i]))
+            min_run = permuted_list[i]
+        else:
+            if sum(get_equipping_times_for_jobs(permuted_list[i])) < min_time:
+                min_run = permuted_list[i]
+    return min_run
+
+
 def is_runnable(jobs_list):
     # checks if a given job execution sequence is executable and has no failed dependency
     # ie, for execution of job i, there is a job k in [0,..., i-1] which has to be
@@ -436,7 +466,7 @@ def is_runnable(jobs_list):
         return True
 
 
-def get_parallelization(jobs):
+def get_parallelization_1(jobs):
     # returns an array of arrays that indicate the jobs that can be executed in parallel
     # jobs in the same inner array need the same machine to be done, so they cannot be
     # parallelized. Only jobs in different inner arrays can be run consequently
@@ -468,6 +498,23 @@ def get_parallelization(jobs):
             job_index_1 += 1
 
     return parallel_jobs
+
+
+def get_parallelization_2(done_jobs, bands, jobs):
+    to_be_done = [x for x in jobs if x not in done_jobs]
+    to_return = []
+
+    if len(done_jobs) == 0:
+        temp = [x for x in to_be_done if x.get_degree() == 0]
+        to_return.append(temp[0])
+        return to_return
+    else:
+        while len(to_return) < bands:
+            for i in range(0, bands + 1):
+                temp = [x for x in to_be_done if x.get_degree() == i]
+                if len(temp) > 0:
+                    to_return.append(temp[0])
+    return to_be_done
 
 
 def submit_orders(order):
@@ -589,6 +636,7 @@ class Lernfabrik:
         self.next_creating = ""  # string to denote the next created part
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
         self.orders = OrderList()  # custom data type to receive orders, initially Null
+        self.done_jobs = []
 
     # operation
     def operation(self, machine, operating_time):
@@ -754,87 +802,85 @@ class Lernfabrik:
         if job.job_before is not None and job.job_before.get_completed():
             job.set_cumulative_mz(job.get_cumulative_mz() * job.job_before.get_cumulative_mz())
 
-    def fulfill_order(self, order_number, order):
+    def parallel_job_execution(self, jobs):
+        # called n times as our parallelized_jobs array to execute jobs in parallel
+        for job in jobs:
+            part_name = job.get_part_name()
+            this_amount = get_output_per_part(part_name)
+            yield self.env.process(self.do_job(job, part_name))
+
+            job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
+            self.done_jobs.append(job)
+
+            if all_jobs_completed_for_part(part_name):
+                #  all machines required to produce a part have been operated
+                # part is created
+                this_amount *= job.get_cumulative_mz()
+                increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+
+                # decrease_jobs(part_name)
+
+                print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
+
+    def fulfill_order_without_parallelization(self, order_number, order):
         # received and order and fulfills it
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
         UNILOKK_COUNT = 0
-        working_order = order.amount - remaining_unilokk  # actual order needed to be produced
 
-        print("leftover Unilokk ", remaining_unilokk)
+        # need to produce if our order exceeds what is available
+        if order.amount > remaining_unilokk:
+            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
 
-        parts_needed = get_parts_needed(working_order)
-        print(parts_needed)
+            print("leftover Unilokk ", remaining_unilokk)
 
-        execution_sequence = amount_of_runs(parts_needed)
-        print("execution sequence", execution_sequence)
-        execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-        print("execution sequence by parts", execution_sequence_in_parts)
+            parts_needed = get_parts_needed(working_order)
+            print(parts_needed)
 
-        # parts creation
-        jobs = []  # array of jobs needed to fulfill this order
+            execution_sequence = amount_of_runs(parts_needed)
+            print("execution sequence", execution_sequence)
+            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+            print("execution sequence by parts", execution_sequence_in_parts)
 
-        for part in execution_sequence_in_parts:
-            jobs_for_part = get_jobs_for_part(part)
+            # parts creation
+            jobs = []  # array of jobs needed to fulfill this order
 
-            # unpacking jobs into one list full of all the jobs
-            for job in jobs_for_part:
-                jobs.append(job)
+            for part in execution_sequence_in_parts:
+                jobs_for_part = get_jobs_for_part(part)
 
-        print("\nBefore bundling:")
-        for job in jobs:
-            print(job.get_name())
-        print("\n")
+                # unpacking jobs into one list full of all the jobs
+                for job in jobs_for_part:
+                    jobs.append(job)
 
-        # TODO: put all this in a method called optimize
-        # bundling up similar jobs together to minimize Ruestungszeit
-        jobs.sort(key=get_job_keys)
+            # TODO: put all this in a method called optimize
+            # bundling up similar jobs together to minimize Ruestungszeit
+            jobs.sort(key=get_job_keys)
 
-        print("\n After bundling:")
-        for job in jobs:
-            print(job.get_name())
-        print("\n")
+            # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
 
-        jobs_copy = jobs[:]  # shallow copy of the list
+            # why running loop again? because an optimizer will bee ran before here to determine the best
+            # order or jobs for minimal Ruestungszeiten
+            for job in jobs:
+                # check if job required to be done before this is done
+                if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
+                    print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
+                    jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
+                else:
+                    part_name = job.get_part_name()
+                    this_amount = get_output_per_part(part_name)
+                    yield self.env.process(self.do_job(job, part_name))
 
-        parallelized_jobs = get_parallelization(jobs_copy)
+                    job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
-        print("parallelization: ")
-        for thing in parallelized_jobs:
-            print("\njobs for machine ", thing[0].get_machine_required())
-            if type(thing) == list:
-                for thin_2 in thing:
-                    print(thin_2.get_name())
-        print("\n")
+                    if all_jobs_completed_for_part(part_name):
+                        #  all machines required to produce a part have been operated
+                        # part is created
+                        this_amount *= job.get_cumulative_mz()
+                        increase_part_count(part_name, math.floor(this_amount))  # add newly created part
 
-        # getting the equipping times as matrix for the optimization
-        print(get_equipping_times_for_jobs(jobs))
+                        # decrease_jobs(part_name)
 
-        # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
-
-        # why running loop again? because an optimizer will bee ran before here to determine the best
-        # order or jobs for minimal Ruestungszeiten
-        for job in jobs:
-            # check if job required to be done before this is done
-            if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
-                print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
-                jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
-            else:
-                part_name = job.get_part_name()
-                this_amount = get_output_per_part(part_name)
-                yield self.env.process(self.do_job(job, part_name))
-
-                job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
-
-                if all_jobs_completed_for_part(part_name):
-                    #  all machines required to produce a part have been operated
-                    # part is created
-                    this_amount *= job.get_cumulative_mz()
-                    increase_part_count(part_name, math.floor(this_amount))  # add newly created part
-
-                    # decrease_jobs(part_name)
-
-                    print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
+                        print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
@@ -843,8 +889,171 @@ class Lernfabrik:
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
         # fulfilling order
-        if UNILOKK_COUNT >= working_order:
-            UNILOKK_COUNT -= working_order
+        if UNILOKK_COUNT >= (order.amount - remaining_unilokk):
+            UNILOKK_COUNT -= (order.amount - remaining_unilokk)
+            global ORDERS_FULFILLED
+            ORDERS_FULFILLED += 1
+            print("Order fulfilled completely\n\n")
+        else:
+            print("Order unfulfilled\n\n")
+
+    def fulfill_oder_with_parallelization(self, order_number, order):
+        # received and order and fulfills it
+        global UNILOKK_COUNT
+        remaining_unilokk = UNILOKK_COUNT
+        UNILOKK_COUNT = 0
+
+        # need to produce if our order exceeds what is available
+        if order.amount > remaining_unilokk:
+            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
+
+            print("leftover Unilokk ", remaining_unilokk)
+
+            parts_needed = get_parts_needed(working_order)
+            print(parts_needed)
+
+            execution_sequence = amount_of_runs(parts_needed)
+            print("execution sequence", execution_sequence)
+            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+            print("execution sequence by parts", execution_sequence_in_parts)
+
+            # parts creation
+            jobs = []  # array of jobs needed to fulfill this order
+
+            for part in execution_sequence_in_parts:
+                jobs_for_part = get_jobs_for_part(part)
+
+                # unpacking jobs into one list full of all the jobs
+                for job in jobs_for_part:
+                    jobs.append(job)
+
+            print("\nBefore degree sort:")
+            for job in jobs:
+                print(job.get_name())
+            print("\n")
+
+            # TODO: put all this in a method called optimize
+            # bundling up similar jobs together to minimize Ruestungszeit
+            jobs.sort(key=get_degree)
+
+            print("\nAfter degree sort:")
+            for job in jobs:
+                print(job.get_name())
+            print("\n")
+
+            jobs_copy = jobs[:]  # shallow copy of the list
+            bands = len(get_parallelization_1(jobs_copy))
+            print("bands is ", bands)
+
+            while len(self.done_jobs) < len(jobs):
+                to_do = get_parallelization_2(self.done_jobs, bands, jobs)
+                self.parallel_job_execution(to_do)
+
+        # else we already have enough to fulfill order, or we have produced enough
+        # assembling parts
+        yield self.env.process(self.finish_unilokk_creation())
+
+        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+
+        # fulfilling order
+        if UNILOKK_COUNT >= (order.amount - remaining_unilokk):
+            UNILOKK_COUNT -= (order.amount - remaining_unilokk)
+            global ORDERS_FULFILLED
+            ORDERS_FULFILLED += 1
+            print("Order fulfilled completely\n\n")
+        else:
+            print("Order unfulfilled\n\n")
+
+    def fulfill_order_with_opt(self, order_number, order):
+        # received and order and fulfills it
+        # before this method Ruestungszeit was 19800 (running all jobs in jobs list)
+        global UNILOKK_COUNT
+        remaining_unilokk = UNILOKK_COUNT
+        UNILOKK_COUNT = 0
+
+        # need to produce if our order exceeds what is available
+        if order.amount > remaining_unilokk:
+            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
+
+            print("leftover Unilokk ", remaining_unilokk)
+
+            parts_needed = get_parts_needed(working_order)
+            print(parts_needed)
+
+            execution_sequence = amount_of_runs(parts_needed)
+            print("execution sequence", execution_sequence)
+            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+            print("execution sequence by parts", execution_sequence_in_parts)
+
+            # parts creation
+            jobs = []  # array of jobs needed to fulfill this order
+
+            for part in execution_sequence_in_parts:
+                jobs_for_part = get_jobs_for_part(part)
+
+                # unpacking jobs into one list full of all the jobs
+                for job in jobs_for_part:
+                    jobs.append(job)
+
+            print("\nBefore bundling:")
+            for job in jobs:
+                print(job.get_name())
+            print("\n")
+
+            # bundling up similar jobs together to minimize Ruestungszeit
+            # doesn't seem to have an effect on Ruestungszeit
+            jobs.sort(key=get_job_keys)
+
+            jobs_copy = jobs[:]  # shallow copy of the list
+            jobs_to_run = []
+
+            parallelized_jobs = get_parallelization_1(jobs_copy)
+            print("\n After parallelization:")
+            for job in parallelized_jobs:
+                print(job)
+            print("\n")
+
+            for i in parallelized_jobs:
+                jl = sort_by_minimal_runtime(i)
+                print("minimal run is ", i)
+                for j in jl:
+                    jobs_to_run.append(j)
+
+            # order or jobs for minimal Ruestungszeiten
+            for job in jobs_to_run:
+                # check if job required to be done before this is done
+                if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
+                    print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
+                    jobs_to_run.insert(jobs_to_run.index(job.get_job_before()) + 1,
+                                       job)  # inserting job after its prerequisite
+                else:
+                    part_name = job.get_part_name()
+                    this_amount = get_output_per_part(part_name)
+                    yield self.env.process(self.do_job(job, part_name))
+
+                    job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
+
+                    if all_jobs_completed_for_part(part_name):
+                        #  all machines required to produce a part have been operated
+                        # part is created
+                        this_amount *= job.get_cumulative_mz()
+                        increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+
+                        # decrease_jobs(part_name)
+
+                        print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
+
+        # assembling parts
+        yield self.env.process(self.finish_unilokk_creation())
+
+        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+
+        # fulfilling
+        # hint: (order.amount - remaining_unilokk) is same as working_order from up there
+        if UNILOKK_COUNT >= (order.amount - remaining_unilokk):
+            UNILOKK_COUNT -= (order.amount - remaining_unilokk)
             global ORDERS_FULFILLED
             ORDERS_FULFILLED += 1
             print("Order fulfilled completely\n\n")
@@ -886,7 +1095,8 @@ class Lernfabrik:
         prioritized_list = self.orders.order_by_priority()
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_order(order_number + 1, prioritized_list[order_number]))
+            yield self.env.process(self.fulfill_order_with_opt(
+                order_number + 1, prioritized_list[order_number]))
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
@@ -914,10 +1124,13 @@ Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
 Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
+Oberteil_Saegen.set_degree(0)
 Oberteil_Drehen.set_job_before(Oberteil_Saegen)
 Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
+Oberteil_Drehen.set_degree(1)
 Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
 Oberteil_Fraesen.set_job_after(None)
+Oberteil_Fraesen.set_degree(2)
 Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
@@ -925,8 +1138,10 @@ Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
 Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
+Unterteil_Saegen.set_degree(0)
 Unterteil_Drehen.set_job_before(Unterteil_Saegen)
 Unterteil_Drehen.set_job_after(None)
+Unterteil_Drehen.set_degree(1)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
@@ -934,8 +1149,10 @@ Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
 Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
+Halteteil_Saegen.set_degree(0)
 Halteteil_Drehen.set_job_before(Halteteil_Saegen)
 Halteteil_Drehen.set_job_after(None)
+Halteteil_Drehen.set_degree(1)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
@@ -945,12 +1162,16 @@ Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
 Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
+Ring_Saegen.set_degree(0)
 Ring_Drehen.set_job_before(Ring_Saegen)
 Ring_Drehen.set_job_after(Ring_Senken_1)
+Ring_Drehen.set_degree(1)
 Ring_Senken_1.set_job_before(Ring_Drehen)
 Ring_Senken_1.set_job_after(Ring_Senken_2)
+Ring_Senken_1.set_degree(2)
 Ring_Senken_2.set_job_before(Ring_Senken_1)
 Ring_Senken_2.set_job_after(None)
+Ring_Senken_2.set_degree(3)
 Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
 
 # Finishing jobs
