@@ -853,9 +853,6 @@ class Lernfabrik:
                     jobs.append(job)
 
             # TODO: put all this in a method called optimize
-            # bundling up similar jobs together to minimize Ruestungszeit
-            jobs.sort(key=get_job_keys)
-
             # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
 
             # why running loop again? because an optimizer will bee ran before here to determine the best
@@ -941,8 +938,7 @@ class Lernfabrik:
                 print(job.get_name())
             print("\n")
 
-            jobs_copy = jobs[:]  # shallow copy of the list
-            bands = len(get_parallelization_1(jobs_copy))
+            bands = len(get_parallelization_1(jobs))
             print("bands is ", bands)
 
             while len(self.done_jobs) < len(jobs):
@@ -1005,10 +1001,9 @@ class Lernfabrik:
             # doesn't seem to have an effect on Ruestungszeit
             jobs.sort(key=get_job_keys)
 
-            jobs_copy = jobs[:]  # shallow copy of the list
             jobs_to_run = []
 
-            parallelized_jobs = get_parallelization_1(jobs_copy)
+            parallelized_jobs = get_parallelization_1(jobs)
             print("\n After parallelization:")
             for job in parallelized_jobs:
                 print(job)
