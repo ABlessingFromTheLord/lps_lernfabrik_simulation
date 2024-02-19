@@ -306,119 +306,101 @@ def get_job_keys(job):
             return 10
 
 
-def get_equipping_times_for_jobs(jobs_list):
-    # returns the equipping times of one job to the next as a list
-    # used in optimization of Ruestungszeit
-    ruestungszeiten = []
-    previously_done = None
+def get_job_with_minimal_degree(job_list):
+    # returns the job with the minimal degree, ie, the job that should be executed first
+    job_with_minimal_degree = None
 
-    for job in jobs_list:
-        if job.get_machine_required() == machine_fz12:
-            ruestungszeiten.append(30 * 60)
-        elif job.get_machine_required() == machine_jaespa:
-            ruestungszeiten.append(0)
-        elif job.get_machine_required() == machine_gz200:
-            match job.get_part_name():
-                case "Oberteil":
-                    match previously_done:
-                        case None:
-                            previously_done = "Oberteil"
-                            ruestungszeiten.append(0)
-                        case "Oberteil":
-                            previously_done = "Oberteil"
-                            ruestungszeiten.append(0)
-                        case "Unterteil":
-                            previously_done = "Oberteil"
-                            ruestungszeiten.append(45 * 60)
-                        case "Halteteil":
-                            previously_done = "Oberteil"
-                            ruestungszeiten.append(40 * 60)
-                        case "Ring":
-                            previously_done = "Oberteil"
-                            ruestungszeiten.append(45 * 60)
+    for i in range(len(job_list)):
+        if i == 0:
+            job_with_minimal_degree = job_list[i]
+        else:
+            if job_list[i].get_degree() < job_with_minimal_degree.get_degree():
+                job_with_minimal_degree = job_list[i]
 
-                case "Unterteil":
-                    match previously_done:
-                        case None:
-                            previously_done = "Unterteil"
-                            ruestungszeiten.append(0)
-                        case "Oberteil":
-                            previously_done = "Unterteil"
-                            ruestungszeiten.append(45 * 60)
-                        case "Unterteil":
-                            previously_done = "Unterteil"
-                            ruestungszeiten.append(0)
-                        case "Halteteil":
-                            previously_done = "Unterteil"
-                            ruestungszeiten.append(40 * 60)
-                        case "Ring":
-                            previously_done = "Unterteil"
-                            ruestungszeiten.append(45 * 60)
-
-                case "Halteteil":
-                    match previously_done:
-                        case None:
-                            previously_done = "Halteteil"
-                            ruestungszeiten.append(0)
-                        case "Oberteil":
-                            previously_done = "Halteteil"
-                            ruestungszeiten.append(40 * 60)
-                        case "Unterteil":
-                            previously_done = "Halteteil"
-                            ruestungszeiten.append(40 * 60)
-                        case "Halteteil":
-                            previously_done = "Halteteil"
-                            ruestungszeiten.append(0)
-                        case "Ring":
-                            previously_done = "Halteteil"
-                            ruestungszeiten.append(45 * 60)
-
-                case "Ring":
-                    match previously_done:
-                        case None:
-                            previously_done = "Ring"
-                            ruestungszeiten.append(0)
-                        case "Oberteil":
-                            previously_done = "Ring"
-                            ruestungszeiten.append(45 * 60)
-                        case "Unterteil":
-                            previously_done = "Ring"
-                            ruestungszeiten.append(45 * 60)
-                        case "Halteteil":
-                            previously_done = "Ring"
-                            ruestungszeiten.append(45 * 60)
-                        case "Ring":
-                            previously_done = "Ring"
-                            ruestungszeiten.append(0)
-
-    return ruestungszeiten
+    return job_with_minimal_degree
 
 
-def fill_with_zeroes(array, n):
-    # returns an array appended with zeroes to the length n
-    # useful so all arrays have same dimension later in optimization algorithm
-    while len(array) < n:
-        array.append(0)
-    return array
+def get_drehjob_equipping_time(job_1, job_2):
+    # returns the Drehjob of the next job after the current one based on the matrix table
+    # on the Question presentation on page 9
+    match job_1.get_name():
+        case "Oberteil_Drehen":
+            match job_2.get_name():
+                case "Oberteil_Drehen":
+                    return 0
+                case "Unterteil_Drehen":
+                    return 45 * 60
+                case "Halteteil_Drehen":
+                    return 40 * 60
+                case "Ring_Drehen":
+                    return 45 * 60
+
+        case "Unterteil_Drehen":
+            match job_2.get_name():
+                case "Oberteil_Drehen":
+                    return 45 * 60
+                case "Unterteil_Drehen":
+                    return 0
+                case "Halteteil_Drehen":
+                    return 40 * 60
+                case "Ring_Drehen":
+                    return 45 * 60
+
+        case "Halteteil_Drehen":
+            match job_2.get_name():
+                case "Oberteil_Drehen":
+                    return 40 * 60
+                case "Unterteil_Drehen":
+                    return 40 * 60
+                case "Halteteil_Drehen":
+                    return 0
+                case "Ring_Drehen":
+                    return 45 * 60
+
+        case "Ring_Drehen":
+            match job_2.get_name():
+                case "Oberteil_Drehen":
+                    return 45 * 60
+                case "Unterteil_Drehen":
+                    return 45 * 60
+                case "Halteteil_Drehen":
+                    return 45 * 60
+                case "Ring_Drehen":
+                    return 0
 
 
-def sort_by_minimal_runtime(job_list):
-    # return the job execution sequence with minimal Ruestungszeit
+def get_next_job_with_minimal_runtime(job, job_list):
+    # returns the next Drehjob that should be run after this one to get minimal equipping times
+    next_job = job_list[0]
+    min_runtime = get_drehjob_equipping_time(job, job_list[0])
+
+    for i in range(1, len(job_list)):
+        if get_drehjob_equipping_time(job, job_list[i]) < min_runtime:
+            min_runtime = get_drehjob_equipping_time(job, job_list[i])
+            next_job = job_list[i]
+
+    return next_job
+
+
+def sort_drehjobs_by_minimal_runtime(job_list):
+    # return the job execution sequence of the Drehjobs with minimal Ruestungszeit
     if len(job_list) <= 1:
         return job_list
 
-    permuted_list = list(itertools.permutations(job_list))
     min_run = []
-    min_time = None
+    job_with_minimal_degree = get_job_with_minimal_degree(job_list)
+    min_run.append(job_with_minimal_degree)
+    job_list.remove(job_with_minimal_degree)
 
-    for i in range(len(permuted_list)):
-        permuted_list[i] = list(permuted_list[i])  # converting elements to list from tuples
-        if i == 0:
-            min_time = sum(get_equipping_times_for_jobs(permuted_list[i]))
-            min_run = permuted_list[i]
-        else:
-            if sum(get_equipping_times_for_jobs(permuted_list[i])) < min_time:
-                min_run = permuted_list[i]
+    job_index = 0
+    n = len(job_list)
+
+    while job_index < n:
+        job_with_min_runtime = get_next_job_with_minimal_runtime(min_run[-1], job_list)
+        min_run.append(job_with_min_runtime)
+        job_list.remove(job_with_min_runtime)
+        job_index += 1
+
     return min_run
 
 
@@ -542,6 +524,14 @@ def adjust(genes):
             genes[k] = math.ceil(genes[k])
             copy.append(int(genes[k]))
     return copy
+
+
+def fill_with_zeroes(array, n):
+    # returns an array appended with zeroes to the length n
+    # useful so all arrays have same dimension later in optimization algorithm
+    while len(array) < n:
+        array.append(0)
+    return array
 
 
 # optimization
@@ -914,28 +904,31 @@ class Lernfabrik:
                 for job in jobs_for_part:
                     jobs.append(job)
 
-            print("\nBefore bundling:")
+            print("\n Jobs before Drehjobs min runtime:")
             for job in jobs:
                 print(job.get_name())
             print("\n")
 
-            # bundling up similar jobs together to minimize Ruestungszeit
-            # doesn't seem to have an effect on Ruestungszeit
-            jobs.sort(key=get_job_keys)
+            # ordering the drehjobs in the order of minimal Ruestungszeit
+            # we do not care about other jobs since they have constant Ruestungszeit
+            drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
+            drehen_jobs = sort_drehjobs_by_minimal_runtime(drehen_jobs)
 
-            jobs_to_run = []
-
-            parallelized_jobs = get_parallelization_1(jobs)
-            print("\n After parallelization:")
-            for job in parallelized_jobs:
-                print(job)
+            print("\nDrehjobs with minimal runtime:")
+            for job in drehen_jobs:
+                print(job.get_name())
             print("\n")
 
-            for i in parallelized_jobs:
-                jl = sort_by_minimal_runtime(i)
-                print("minimal run is ", i)
-                for j in jl:
-                    jobs_to_run.append(j)
+            # append jobs according to degree
+            saegen_jobs = [x for x in jobs if x.get_machine_required() == machine_jaespa]
+            fraesen_jobs = [x for x in jobs if x.get_machine_required() == machine_fz12]
+            senken_jobs = [x for x in jobs if x.get_machine_required() == machine_arbeitsplatz_at_gz200]
+
+            jobs_to_run = []
+            jobs_to_run.extend(saegen_jobs)
+            jobs_to_run.extend(drehen_jobs)
+            jobs_to_run.extend(fraesen_jobs)
+            jobs_to_run.extend(senken_jobs)
 
             # order or jobs for minimal Ruestungszeiten
             for job in jobs_to_run:
