@@ -9,6 +9,7 @@ class Job:
         self.machine_required = machine
         self.completed = 0
         self.cumulative_mz = None
+        self.degree = None
 
     # getters
     def get_name(self):
@@ -35,6 +36,9 @@ class Job:
     def get_cumulative_mz(self):
         return self.cumulative_mz
 
+    def get_degree(self):
+        return self.degree
+
     # setters
     def set_job_before(self, job):
         self.job_before = job
@@ -47,5 +51,8 @@ class Job:
 
     def set_cumulative_mz(self, value):
         self.cumulative_mz = value
+
+    def set_degree(self, value):
+        self.degree = value
 
 
