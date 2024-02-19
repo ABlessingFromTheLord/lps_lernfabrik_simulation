@@ -10,13 +10,7 @@ from pymoo.core.problem import Problem
 import numpy as np
 
 # global variables
-PARTS_MADE = 0
-
 # breaking probability
-KAPUTT_WSK = 10
-JAESPA_MZ = 0.98
-GZ_200_MZ = 0.85
-FZ12_MZ = 0  # TODO: get value
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
 MTTR = 2 * 60  # TODO: setting it to one minute causes terminated processes to be interrupted
@@ -57,19 +51,6 @@ UNILOKK_COUNT = 0
 
 
 # global helper functions
-def get_machines_for_part(part_name):
-    #  returns the machines required to create a certain part of Unilokk
-    match part_name:
-        case "Oberteil":
-            return OBERTEIL_MACHINES
-        case "Unterteil":
-            return UNTERTEIL_MACHINES
-        case "Halteteil":
-            return HALTETEIL_MACHINES
-        case "Ring":
-            return RING_MACHINES
-
-
 def get_jobs_for_part(part_name):
     #  returns the jobs required to be done to create a certain part of Unilokk
     match part_name:
@@ -81,17 +62,6 @@ def get_jobs_for_part(part_name):
             return Halteteil_Jobs
         case "Ring":
             return Ring_Jobs
-
-
-def decrease_jobs(part_name):
-    jobs = get_jobs_for_part(part_name)
-
-    for job in jobs:
-        if job.get_completed() >= 1:
-            job.set_completed(job.get_completed() - 1)
-
-        else:
-            job.set_completed(0)
 
 
 def increase_part_count(part_name, output):
@@ -136,27 +106,25 @@ def get_mz(machine):
         return 0.85
     elif machine == machine_fz12:
         return 0.98
-    elif machine == machine_arbeitsplatz or machine == machine_arbeitsplatz_2:
+    elif machine == machine_arbeitsplatz_at_gz200 or machine == machine_arbeitsplatz_2:
         return 1
-    else:
-        return 1
-    # TODO: FZ12 left, also the MZ in Ring production to be checked
 
 
-def get_quality_grade(machine):
-    # returns the quality grade of parts created by certain machine
+def get_cumulative_quality_grade(part_name):
+    # ran after completion of the part creation process
+    # returns cumulative quality grade of the machines used
     # i.e if quality grade is 98%, it means 98% of material produced are usable to the next stage
-    # 2% are thrown away
-    if machine == machine_jaespa:
-        return 1
-    elif machine == machine_gz200:
-        return 0.98
-    elif machine == machine_fz12:
-        return 0.95
-    elif machine == machine_arbeitsplatz_2:
-        return 0.85
-    else:
-        return 1
+    # 2% are thrown away, to rectify this, we produce 102% of the order, hence multiply output
+    # by cumulative quality grade
+    match part_name:
+        case "Oberteil":
+            return 1 * 0.98 * 0.98 * 0.95
+        case "Unterteil":
+            return 1 * 0.98 * 0.98
+        case "Halteteil":
+            return 1 * 0.98 * 0.98
+        case "Ring":
+            return 1 * 0.98 * 1
 
 
 def get_output_per_part(part_name):
@@ -334,10 +302,8 @@ def get_job_keys(job):
             return 8
         case "Ring_Drehen":
             return 9
-        case "Ring_Senken_1":
+        case "Ring_Senken":
             return 10
-        case "Ring_Senken_2":
-            return 11
 
 
 def get_equipping_times_for_jobs(jobs_list):
@@ -714,43 +680,8 @@ class Lernfabrik:
         elif machine == machine_jaespa:
             return 0
 
-        elif (machine == machine_arbeitsplatz) or (machine == machine_arbeitsplatz_2):
+        elif (machine == machine_arbeitsplatz_at_gz200) or (machine == machine_arbeitsplatz_2):
             return 0
-
-    def get_operating_time(self, machine, part_name):
-        #  returns the operating time for a certain machine on a specific Unilokk part
-        match part_name:
-            case "Oberteil":
-                if machine == machine_jaespa:
-                    return 34
-                elif machine == machine_gz200:
-                    return 287
-                elif machine == machine_fz12:
-                    return 376
-
-            case "Unterteil":
-                if machine == machine_jaespa:
-                    return 20
-                elif machine == machine_gz200:
-                    return 247
-
-            case "Halteteil":
-                if machine == machine_jaespa:
-                    return 4
-                elif machine == machine_gz200:
-                    return 255
-
-            case "Ring":
-                if machine == machine_jaespa:
-                    return 3
-                elif machine == machine_gz200:
-                    match self.done_once:
-                        case True:
-                            return 10
-                        case False:
-                            return 185
-                elif machine == machine_arbeitsplatz:
-                    return 10
 
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
@@ -792,15 +723,6 @@ class Lernfabrik:
 
         if required_machine == machine_gz200:
             self.previously_created = part_name  # setting the control for get_ruestung_zeit function
-        if part_name == "Ring":
-            self.done_once = not self.done_once  # setting control for get_operating_time function
-
-        # creating cumulative mz
-        job.set_cumulative_mz(get_mz(required_machine))
-        print("cumulative_mz ", job.get_cumulative_mz())
-
-        if job.job_before is not None and job.job_before.get_completed():
-            job.set_cumulative_mz(job.get_cumulative_mz() * job.job_before.get_cumulative_mz())
 
     def parallel_job_execution(self, jobs):
         # called n times as our parallelized_jobs array to execute jobs in parallel
@@ -1024,20 +946,21 @@ class Lernfabrik:
                                        job)  # inserting job after its prerequisite
                 else:
                     part_name = job.get_part_name()
-                    this_amount = get_output_per_part(part_name)
+                    amount_produced = get_output_per_part(part_name)
                     yield self.env.process(self.do_job(job, part_name))
 
                     job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
                     if all_jobs_completed_for_part(part_name):
-                        #  all machines required to produce a part have been operated
-                        # part is created
-                        this_amount *= job.get_cumulative_mz()
-                        increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+                        #  all machines required to produce a part have been operated part is created
+                        total_defected_parts = 1 - get_cumulative_quality_grade(part_name)
 
-                        # decrease_jobs(part_name)
+                        # to compensate for the defected parts due to machine's quality grade,
+                        # we produce (100% of order + cumulative quality grade)
+                        amount_produced *= (1 + total_defected_parts)
+                        increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
 
-                        print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
+                        print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
 
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
@@ -1103,14 +1026,14 @@ env = simpy.Environment()
 machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
 machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
 # machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
 UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
 HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
+RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz_at_gz200]
 
 # instantiating jobs
 # Oberteil creation jobs
@@ -1153,21 +1076,17 @@ Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 # Ring creation jobs
 Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
 Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Saegen.set_degree(0)
 Ring_Drehen.set_job_before(Ring_Saegen)
-Ring_Drehen.set_job_after(Ring_Senken_1)
+Ring_Drehen.set_job_after(Ring_Senken)
 Ring_Drehen.set_degree(1)
-Ring_Senken_1.set_job_before(Ring_Drehen)
-Ring_Senken_1.set_job_after(Ring_Senken_2)
-Ring_Senken_1.set_degree(2)
-Ring_Senken_2.set_job_before(Ring_Senken_1)
-Ring_Senken_2.set_job_after(None)
-Ring_Senken_2.set_degree(3)
-Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
+Ring_Senken.set_job_before(Ring_Drehen)
+Ring_Senken.set_job_after(None)
+Ring_Senken.set_degree(2)
+Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken]
 
 # Finishing jobs
 Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
