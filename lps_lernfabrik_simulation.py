@@ -136,11 +136,8 @@ def get_mz(machine):
         return 0.85
     elif machine == machine_fz12:
         return 0.98
-    elif machine == machine_arbeitsplatz or machine == machine_arbeitsplatz_2:
+    elif machine == machine_arbeitsplatz_at_gz200 or machine == machine_arbeitsplatz_2:
         return 1
-    else:
-        return 1
-    # TODO: FZ12 left, also the MZ in Ring production to be checked
 
 
 def get_quality_grade(machine):
@@ -334,10 +331,8 @@ def get_job_keys(job):
             return 8
         case "Ring_Drehen":
             return 9
-        case "Ring_Senken_1":
+        case "Ring_Senken":
             return 10
-        case "Ring_Senken_2":
-            return 11
 
 
 def get_equipping_times_for_jobs(jobs_list):
@@ -714,7 +709,7 @@ class Lernfabrik:
         elif machine == machine_jaespa:
             return 0
 
-        elif (machine == machine_arbeitsplatz) or (machine == machine_arbeitsplatz_2):
+        elif (machine == machine_arbeitsplatz_at_gz200) or (machine == machine_arbeitsplatz_2):
             return 0
 
     def get_operating_time(self, machine, part_name):
@@ -749,8 +744,8 @@ class Lernfabrik:
                             return 10
                         case False:
                             return 185
-                elif machine == machine_arbeitsplatz:
-                    return 10
+                elif machine == machine_arbeitsplatz_at_gz200:
+                    return 20
 
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
@@ -1103,14 +1098,14 @@ env = simpy.Environment()
 machine_jaespa = simpy.PreemptiveResource(env, capacity=1)  # Maschine zum Saegen
 machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
-machine_arbeitsplatz = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
 # machines for part creation
 OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
 UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
 HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz, machine_gz200]
+RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz_at_gz200]
 
 # instantiating jobs
 # Oberteil creation jobs
@@ -1153,21 +1148,17 @@ Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 # Ring creation jobs
 Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
 Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken_1 = Job("Ring_Senken_1", "Ring", 10, machine_arbeitsplatz)
-Ring_Senken_2 = Job("Ring_Senken_2", "Ring", 10, machine_gz200)
+Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Saegen.set_degree(0)
 Ring_Drehen.set_job_before(Ring_Saegen)
-Ring_Drehen.set_job_after(Ring_Senken_1)
+Ring_Drehen.set_job_after(Ring_Senken)
 Ring_Drehen.set_degree(1)
-Ring_Senken_1.set_job_before(Ring_Drehen)
-Ring_Senken_1.set_job_after(Ring_Senken_2)
-Ring_Senken_1.set_degree(2)
-Ring_Senken_2.set_job_before(Ring_Senken_1)
-Ring_Senken_2.set_job_after(None)
-Ring_Senken_2.set_degree(3)
-Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken_1, Ring_Senken_2]
+Ring_Senken.set_job_before(Ring_Drehen)
+Ring_Senken.set_job_after(None)
+Ring_Senken.set_degree(2)
+Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken]
 
 # Finishing jobs
 Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
