@@ -712,11 +712,9 @@ class Lernfabrik:
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
+
         if required_machine == machine_gz200:
-            if self.previous_drehen_job is not None:
-                print("self.previousdrehjob is ", self.previous_drehen_job.get_name())
-            else:
-                print("self.previousdrehjob is NULL")
+            self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
 
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
@@ -727,9 +725,6 @@ class Lernfabrik:
             yield self.process
 
             self.process = None
-
-        if required_machine == machine_gz200:
-            self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
 
     def series_job_execution(self, jobs_in_series):
         # called n times to execute the rest of the jobs that cannot be parallelized
@@ -1109,7 +1104,7 @@ order_8 = Order(25, 10)
 order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
-orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
+orders = [order_1]
 env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
