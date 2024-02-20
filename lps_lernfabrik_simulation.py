@@ -1,4 +1,3 @@
-import itertools
 import math
 import simpy
 import numpy
@@ -320,9 +319,39 @@ def get_job_with_minimal_degree(job_list):
     return job_with_minimal_degree
 
 
+def get_job_with_minimal_degree_by_part(part_name, job_list):
+    # returns the job with the minimal degree, ie, the job that should be executed first
+    job_with_minimal_degree = None
+    jobs_copy = [x for x in job_list if x.get_part_name() == part_name]
+
+    for i in range(len(jobs_copy)):
+        if i == 0:
+            job_with_minimal_degree = jobs_copy[i]
+        else:
+            if jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree():
+                job_with_minimal_degree = jobs_copy[i]
+
+    return job_with_minimal_degree
+
+
+def get_job_with_degree(job_list, degree):
+    # returns the job with the specified degree, if not found it returns None
+    job_to_return = None
+
+    for job in job_list:
+        if job.get_degree() == degree:
+            job_to_return = job
+            break
+
+    return job_to_return
+
+
 def get_drehjob_equipping_time(job_1, job_2):
     # returns the Drehjob of the next job after the current one based on the matrix table
     # on the Question presentation on page 9
+    if job_1 is None:
+        return 0
+
     match job_1.get_name():
         case "Oberteil_Drehen":
             match job_2.get_name():
@@ -404,6 +433,17 @@ def sort_drehjobs_by_minimal_runtime(job_list):
     return min_run
 
 
+def get_job_with_minimal_duration(job_list):
+    # returns the next job with the shortest duration or runtime
+    next_job = job_list[0]
+
+    for i in range(len(job_list)):
+        if job_list[i].get_duration() < next_job.get_duration():
+            next_job = job_list[i]
+
+    return next_job
+
+
 def is_runnable(jobs_list):
     # checks if a given job execution sequence is executable and has no failed dependency
     # ie, for execution of job i, there is a job k in [0,..., i-1] which has to be
@@ -448,21 +488,28 @@ def get_parallelization_1(jobs):
     return parallel_jobs
 
 
-def get_parallelization_2(done_jobs, bands, jobs):
-    to_be_done = [x for x in jobs if x not in done_jobs]
-    to_return = []
+def get_next_jobs(jobs_list):
+    next_jobs = []
 
-    if len(done_jobs) == 0:
-        temp = [x for x in to_be_done if x.get_degree() == 0]
-        to_return.append(temp[0])
-        return to_return
+    for job in jobs_list:
+        if job.get_completed() >= 1 and job.get_job_after() is not None:
+            next_jobs.append(job.get_job_after())
+
+    return next_jobs
+
+
+def get_jobs_in_parallel(bands, previously_done_jobs, jobs_list):
+    # returns jobs that can be run in parallel
+    # TODO: define bands
+    parallel_jobs = []
+
+    if bands == 1:
+        parallel_jobs.append(get_job_with_minimal_duration(jobs_list))
+        return parallel_jobs  # here only one job will be in jobs
     else:
-        while len(to_return) < bands:
-            for i in range(0, bands + 1):
-                temp = [x for x in to_be_done if x.get_degree() == i]
-                if len(temp) > 0:
-                    to_return.append(temp[0])
-    return to_be_done
+        parallel_jobs.extend(get_next_jobs(previously_done_jobs))
+        parallel_jobs.append(get_job_with_minimal_degree(jobs_list))
+        return parallel_jobs
 
 
 def submit_orders(order):
@@ -590,19 +637,20 @@ class Lernfabrik:
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previously_created = ""  # string to denote the previously created part
         self.next_creating = ""  # string to denote the next created part
+        self.previous_drehen_job = None
         self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
 
     # operation
-    def operation(self, machine, operating_time):
+    def operation(self, machine, operating_time, job_name):
         #  simulates an operation, it is an abstract function
 
         # operating machine after equipping
         while operating_time:
             start = self.env.now
             try:
-                print(f"execution time is {operating_time} seconds, started execution at {self.env.now}")
+                print(f"execution time of {job_name} is {operating_time} seconds, started execution at {self.env.now}")
                 yield self.env.timeout(operating_time)  # running operation
                 self.process = None
                 operating_time = 0
@@ -627,49 +675,8 @@ class Lernfabrik:
         # returns the equipping time in minutes as integer
         if machine == machine_fz12:
             return 30 * 60
-
-        elif machine == machine_gz200:
-            if self.previously_created == "":
-                return 0
-            elif (self.previously_created == "Oberteil") and (self.next_creating == "Oberteil"):
-                return 0
-            elif (self.previously_created == "Oberteil") and (self.next_creating == "Unterteil"):
-                return 45 * 60
-            elif (self.previously_created == "Oberteil") and (self.next_creating == "Halteteil"):
-                return 40 * 60
-            elif (self.previously_created == "Oberteil") and (self.next_creating == "Ring"):
-                return 45 * 60
-
-            elif (self.previously_created == "Unterteil") and (self.next_creating == "Oberteil"):
-                return 45 * 60
-            elif (self.previously_created == "Unterteil") and (self.next_creating == "Unterteil"):
-                return 0
-            elif (self.previously_created == "Unterteil") and (self.next_creating == "Halteteil"):
-                return 40 * 60
-            elif (self.previously_created == "Unterteil") and (self.next_creating == "Ring"):
-                return 45 * 60
-
-            elif (self.previously_created == "Halteteil") and (self.next_creating == "Oberteil"):
-                return 40 * 60
-            elif (self.previously_created == "Halteteil") and (self.next_creating == "Unterteil"):
-                return 40 * 60
-            elif (self.previously_created == "Halteteil") and (self.next_creating == "Halteteil"):
-                return 0 * 60
-            elif (self.previously_created == "Halteteil") and (self.next_creating == "Ring"):
-                return 45 * 60
-
-            elif (self.previously_created == "Ring") and (self.next_creating == "Oberteil"):
-                return 45 * 60
-            elif (self.previously_created == "Ring") and (self.next_creating == "Unterteil"):
-                return 45 * 60
-            elif (self.previously_created == "Ring") and (self.next_creating == "Halteteil"):
-                return 45 * 60
-            elif (self.previously_created == "Ring") and (self.next_creating == "Ring"):
-                return 0
-
         elif machine == machine_jaespa:
             return 0
-
         elif (machine == machine_arbeitsplatz_at_gz200) or (machine == machine_arbeitsplatz_2):
             return 0
 
@@ -689,15 +696,17 @@ class Lernfabrik:
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
 
-    def do_job(self, job, part_name):
+    def do_job(self, job):
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         required_machine = job.get_machine_required()
-        equipping_time = self.get_ruestung_zeit(required_machine)
+        if required_machine == machine_gz200:
+            equipping_time = get_drehjob_equipping_time(self.previous_drehen_job, job)
+        else:
+            equipping_time = self.get_ruestung_zeit(required_machine)
         operating_time = job.get_duration()
 
-        if required_machine == machine_gz200:
-            self.next_creating = part_name
+        print("For job ", job.get_name(), "Ruestungszeit: ", equipping_time)
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
@@ -705,106 +714,44 @@ class Lernfabrik:
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
             yield self.env.timeout(equipping_time)
-            self.process = self.env.process(self.operation(required_machine, operating_time))  # operating machinery
+            self.process = self.env.process(self.operation(
+                required_machine, operating_time, job.get_name()))  # operating machinery
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
             yield self.process
 
             self.process = None
 
         if required_machine == machine_gz200:
-            self.previously_created = part_name  # setting the control for get_ruestung_zeit function
+            self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
 
-    def parallel_job_execution(self, jobs):
-        # called n times as our parallelized_jobs array to execute jobs in parallel
-        for job in jobs:
+    def series_job_execution(self, jobs_in_series):
+        # called n times to execute the rest of the jobs that cannot be parallelized
+        # its execution is in series
+        for job in jobs_in_series:
             part_name = job.get_part_name()
-            this_amount = get_output_per_part(part_name)
-            yield self.env.process(self.do_job(job, part_name))
+            amount_produced = get_output_per_part(part_name)
+
+            yield self.env.process(self.do_job(job))
 
             job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
             self.done_jobs.append(job)
 
             if all_jobs_completed_for_part(part_name):
-                #  all machines required to produce a part have been operated
-                # part is created
-                this_amount *= job.get_cumulative_mz()
-                increase_part_count(part_name, math.floor(this_amount))  # add newly created part
+                #  all machines required to produce a part have been operated part is created
+                total_defected_parts = 1 - get_cumulative_quality_grade(part_name)
 
-                # decrease_jobs(part_name)
+                # to compensate for the defected parts due to machine's quality grade,
+                # we produce (100% of order + cumulative quality grade)
+                amount_produced *= (1 + total_defected_parts)
+                increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
 
-                print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
+                print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
 
-    def fulfill_order_without_parallelization(self, order_number, order):
-        # received and order and fulfills it
-        global UNILOKK_COUNT
-        remaining_unilokk = UNILOKK_COUNT
-        UNILOKK_COUNT = 0
-
-        # need to produce if our order exceeds what is available
-        if order.amount > remaining_unilokk:
-            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
-
-            print("leftover Unilokk ", remaining_unilokk)
-
-            parts_needed = get_parts_needed(working_order)
-            print(parts_needed)
-
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
-
-            # parts creation
-            jobs = []  # array of jobs needed to fulfill this order
-
-            for part in execution_sequence_in_parts:
-                jobs_for_part = get_jobs_for_part(part)
-
-                # unpacking jobs into one list full of all the jobs
-                for job in jobs_for_part:
-                    jobs.append(job)
-
-            # TODO: put all this in a method called optimize
-            # TODO Optimizer runs here, orders jobs in jobs in the order with minimal Ruestungszeiten
-
-            # why running loop again? because an optimizer will bee ran before here to determine the best
-            # order or jobs for minimal Ruestungszeiten
-            for job in jobs:
-                # check if job required to be done before this is done
-                if job.get_job_before() is not None and job.get_job_before().get_completed() <= 0:
-                    print(job.get_job_before().get_name(), " has to be done before ", job.get_name())
-                    jobs.insert(jobs.index(job.get_job_before()) + 1, job)  # inserting job after its prerequisite
-                else:
-                    part_name = job.get_part_name()
-                    this_amount = get_output_per_part(part_name)
-                    yield self.env.process(self.do_job(job, part_name))
-
-                    job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
-
-                    if all_jobs_completed_for_part(part_name):
-                        #  all machines required to produce a part have been operated
-                        # part is created
-                        this_amount *= job.get_cumulative_mz()
-                        increase_part_count(part_name, math.floor(this_amount))  # add newly created part
-
-                        # decrease_jobs(part_name)
-
-                        print(math.floor(this_amount), part_name, "(s) was created at ", self.env.now, "\n")
-
-        # assembling parts
-        yield self.env.process(self.finish_unilokk_creation())
-
-        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
-              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
-
-        # fulfilling order
-        if UNILOKK_COUNT >= (order.amount - remaining_unilokk):
-            UNILOKK_COUNT -= (order.amount - remaining_unilokk)
-            global ORDERS_FULFILLED
-            ORDERS_FULFILLED += 1
-            print("Order fulfilled completely\n\n")
-        else:
-            print("Order unfulfilled\n\n")
+    def parallel_job_execution(self, jobs_in_parallel):
+        # called n times as our parallelized_jobs array to execute jobs in parallel
+        for job in jobs_in_parallel:
+            self.env.process(self.series_job_execution([job]))
+            yield self.env.timeout(0)
 
     def fulfill_oder_with_parallelization(self, order_number, order):
         # received and order and fulfills it
@@ -841,21 +788,49 @@ class Lernfabrik:
                 print(job.get_name())
             print("\n")
 
-            # TODO: put all this in a method called optimize
-            # bundling up similar jobs together to minimize Ruestungszeit
-            jobs.sort(key=get_degree)
+            amount_of_jobs_to_be_done = len(jobs)
 
-            print("\nAfter degree sort:")
-            for job in jobs:
+            # getting the minimal order for the Drehjobs
+            drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
+            drehen_jobs = sort_drehjobs_by_minimal_runtime(drehen_jobs)
+
+            print("\norder of Drehen jobs:")
+            for job in drehen_jobs:
                 print(job.get_name())
             print("\n")
 
-            bands = len(get_parallelization_1(jobs))
-            print("bands is ", bands)
+            previously_done_jobs = []
+            bands = 1
+            while len(self.done_jobs) < amount_of_jobs_to_be_done:
+                # we are only starting out
+                if bands == 1:
+                    first_job = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), jobs)
+                    yield self.env.process(self.series_job_execution([first_job]))
+                    previously_done_jobs.append(first_job)
+                    drehen_jobs.remove(drehen_jobs[0])
+                    jobs.remove(first_job)
+                    bands += 1
 
-            while len(self.done_jobs) < len(jobs):
-                to_do = get_parallelization_2(self.done_jobs, bands, jobs)
-                self.parallel_job_execution(to_do)
+                else:
+                    to_do = get_next_jobs(previously_done_jobs)
+
+                    if len(drehen_jobs) > 0:
+                        nj = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), jobs)
+                        to_do.append(nj)
+                        yield self.env.process(self.parallel_job_execution(to_do))
+
+                        # removing the jobs done
+                        previously_done_jobs.clear()
+                        drehen_jobs.remove(drehen_jobs[0])
+                        for i in to_do:
+                            previously_done_jobs.append(i)
+                            jobs.remove(i)
+                        jobs = jobs[:]
+                        to_do.clear()
+                        bands += 1
+                    else:
+                        for rest_jobs in jobs:
+                            yield self.env.process(self.series_job_execution([rest_jobs]))
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -869,8 +844,13 @@ class Lernfabrik:
             UNILOKK_COUNT -= (order.amount - remaining_unilokk)
             global ORDERS_FULFILLED
             ORDERS_FULFILLED += 1
+
+            self.done_jobs.clear()
+
             print("Order fulfilled completely\n\n")
         else:
+            self.done_jobs.clear()
+
             print("Order unfulfilled\n\n")
 
     def fulfill_order_with_opt(self, order_number, order):
@@ -967,8 +947,13 @@ class Lernfabrik:
             UNILOKK_COUNT -= (order.amount - remaining_unilokk)
             global ORDERS_FULFILLED
             ORDERS_FULFILLED += 1
+
+            self.done_jobs.clear()
+
             print("Order fulfilled completely\n\n")
         else:
+            self.done_jobs.clear()
+
             print("Order unfulfilled\n\n")
 
     def finish_unilokk_creation(self):
@@ -980,7 +965,7 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180, "finishing process"))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count(OBERTEIL)
@@ -1006,7 +991,7 @@ class Lernfabrik:
         prioritized_list = self.orders.order_by_priority()
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_order_with_opt(
+            yield self.env.process(self.fulfill_oder_with_parallelization(
                 order_number + 1, prioritized_list[order_number]))
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
@@ -1087,7 +1072,7 @@ Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
-SIM_TIME = 86400 * 2
+SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
@@ -1103,7 +1088,7 @@ order_8 = Order(25, 10)
 order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
-orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
+orders = [order_1]
 env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
