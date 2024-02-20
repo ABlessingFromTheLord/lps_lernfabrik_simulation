@@ -319,7 +319,7 @@ def get_job_with_minimal_degree(job_list):
     return job_with_minimal_degree
 
 
-def get_job_with_minimal_degree_by_part(part_name, job_list):
+def get_job_with_minimal_degree_by_part(part_name, done_jobs, job_list):
     # returns the job with the minimal degree, ie, the job that should be executed first
     job_with_minimal_degree = None
     jobs_copy = [x for x in job_list if x.get_part_name() == part_name]
@@ -328,7 +328,8 @@ def get_job_with_minimal_degree_by_part(part_name, job_list):
         if i == 0:
             job_with_minimal_degree = jobs_copy[i]
         else:
-            if jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree():
+            if (jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree()
+                    and jobs_copy[i].get_job_before() in done_jobs):
                 job_with_minimal_degree = jobs_copy[i]
 
     return job_with_minimal_degree
@@ -346,66 +347,77 @@ def get_job_with_degree(job_list, degree):
     return job_to_return
 
 
-def get_drehjob_equipping_time(job_1, job_2):
-    # returns the Drehjob of the next job after the current one based on the matrix table
-    # on the Question presentation on page 9
-    if job_1 is None:
+def get_equipping_time(job_1, job_2):
+    # returns the equipping time of the job about to be executed
+    # if the job is a Drehjob, ie, a job that needs machine gz200
+    # then argument job_1 is relevant, otherwise it is irrelevant although passed as argument
+
+    if job_2.get_machine_required() == machine_gz200:
+        if job_1 is None:
+            return 0
+
+        match job_1.get_name():
+            case "Oberteil_Drehen":
+                match job_2.get_name():
+                    case "Oberteil_Drehen":
+                        return 0
+                    case "Unterteil_Drehen":
+                        return 45 * 60
+                    case "Halteteil_Drehen":
+                        return 40 * 60
+                    case "Ring_Drehen":
+                        return 45 * 60
+
+            case "Unterteil_Drehen":
+                match job_2.get_name():
+                    case "Oberteil_Drehen":
+                        return 45 * 60
+                    case "Unterteil_Drehen":
+                        return 0
+                    case "Halteteil_Drehen":
+                        return 40 * 60
+                    case "Ring_Drehen":
+                        return 45 * 60
+
+            case "Halteteil_Drehen":
+                match job_2.get_name():
+                    case "Oberteil_Drehen":
+                        return 40 * 60
+                    case "Unterteil_Drehen":
+                        return 40 * 60
+                    case "Halteteil_Drehen":
+                        return 0
+                    case "Ring_Drehen":
+                        return 45 * 60
+
+            case "Ring_Drehen":
+                match job_2.get_name():
+                    case "Oberteil_Drehen":
+                        return 45 * 60
+                    case "Unterteil_Drehen":
+                        return 45 * 60
+                    case "Halteteil_Drehen":
+                        return 45 * 60
+                    case "Ring_Drehen":
+                        return 0
+
+    elif job_2.get_machine_required() == machine_fz12:
+        return 30 * 60
+    elif job_2.get_machine_required() == machine_jaespa:
         return 0
-
-    match job_1.get_name():
-        case "Oberteil_Drehen":
-            match job_2.get_name():
-                case "Oberteil_Drehen":
-                    return 0
-                case "Unterteil_Drehen":
-                    return 45 * 60
-                case "Halteteil_Drehen":
-                    return 40 * 60
-                case "Ring_Drehen":
-                    return 45 * 60
-
-        case "Unterteil_Drehen":
-            match job_2.get_name():
-                case "Oberteil_Drehen":
-                    return 45 * 60
-                case "Unterteil_Drehen":
-                    return 0
-                case "Halteteil_Drehen":
-                    return 40 * 60
-                case "Ring_Drehen":
-                    return 45 * 60
-
-        case "Halteteil_Drehen":
-            match job_2.get_name():
-                case "Oberteil_Drehen":
-                    return 40 * 60
-                case "Unterteil_Drehen":
-                    return 40 * 60
-                case "Halteteil_Drehen":
-                    return 0
-                case "Ring_Drehen":
-                    return 45 * 60
-
-        case "Ring_Drehen":
-            match job_2.get_name():
-                case "Oberteil_Drehen":
-                    return 45 * 60
-                case "Unterteil_Drehen":
-                    return 45 * 60
-                case "Halteteil_Drehen":
-                    return 45 * 60
-                case "Ring_Drehen":
-                    return 0
+    elif ((job_2.get_machine_required() == machine_arbeitsplatz_at_gz200)
+          or (job_2.get_machine_required() == machine_arbeitsplatz_2)):
+        return 0
 
 
 def get_next_job_with_minimal_runtime(job, job_list):
     # returns the next Drehjob that should be run after this one to get minimal equipping times
     next_job = job_list[0]
-    min_runtime = get_drehjob_equipping_time(job, job_list[0])
+    min_runtime = get_equipping_time(job, job_list[0])
 
     for i in range(1, len(job_list)):
-        if get_drehjob_equipping_time(job, job_list[i]) < min_runtime:
-            min_runtime = get_drehjob_equipping_time(job, job_list[i])
+        if get_equipping_time(job, job_list[i]) < min_runtime:
+            min_runtime = get_equipping_time(job, job_list[i])
             next_job = job_list[i]
 
     return next_job
@@ -444,14 +456,18 @@ def get_job_with_minimal_duration(job_list):
     return next_job
 
 
-def is_runnable(jobs_list):
-    # checks if a given job execution sequence is executable and has no failed dependency
-    # ie, for execution of job i, there is a job k in [0,..., i-1] which has to be
-    # executed before this
-    for i in range(len(jobs_list)):
-        if jobs_list[i].get_job_before() is not None and jobs_list.index(jobs_list[i].get_job_before()) > i:
-            return False
-        return True
+def get_runnable_jobs(done_jobs, jobs_list):
+    # returns a lost of jobs that are eligible to be run
+    to_return = []
+
+    for job in jobs_list:
+        if job.get_degree() == 0:
+            to_return.append(job)
+        else:
+            if job.get_job_before() in done_jobs:
+                to_return.append(job)
+
+    return to_return
 
 
 def get_parallelization_1(jobs):
@@ -671,15 +687,6 @@ class Lernfabrik:
                 self.currently_broken = False
 
     # Helper functions
-    def get_ruestung_zeit(self, machine):
-        # returns the equipping time in minutes as integer
-        if machine == machine_fz12:
-            return 30 * 60
-        elif machine == machine_jaespa:
-            return 0
-        elif (machine == machine_arbeitsplatz_at_gz200) or (machine == machine_arbeitsplatz_2):
-            return 0
-
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while True:
@@ -700,16 +707,16 @@ class Lernfabrik:
         # performs a certain job as subprocess in part creation process
         # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
         required_machine = job.get_machine_required()
-        if required_machine == machine_gz200:
-            equipping_time = get_drehjob_equipping_time(self.previous_drehen_job, job)
-        else:
-            equipping_time = self.get_ruestung_zeit(required_machine)
+        equipping_time = get_equipping_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
 
-        print("For job ", job.get_name(), "Ruestungszeit: ", equipping_time)
-
         global RUESTUNGS_ZEIT
-        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
+        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
+        if required_machine == machine_gz200:
+            if self.previous_drehen_job is not None:
+                print("self.previousdrehjob is ", self.previous_drehen_job.get_name())
+            else:
+                print("self.previousdrehjob is NULL")
 
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
@@ -792,7 +799,13 @@ class Lernfabrik:
 
             # getting the minimal order for the Drehjobs
             drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
+            other_jobs = [x for x in jobs if x.get_machine_required() != machine_gz200]
             drehen_jobs = sort_drehjobs_by_minimal_runtime(drehen_jobs)
+
+            # add jobs in jobs array in the right order in which Drehen jobs are to be executed
+            jobs.clear()
+            jobs.extend(other_jobs)
+            jobs.extend(drehen_jobs)
 
             print("\norder of Drehen jobs:")
             for job in drehen_jobs:
@@ -804,7 +817,8 @@ class Lernfabrik:
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
                 # we are only starting out
                 if bands == 1:
-                    first_job = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), jobs)
+                    first_job = get_job_with_minimal_degree_by_part(
+                        drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
                     yield self.env.process(self.series_job_execution([first_job]))
                     previously_done_jobs.append(first_job)
                     drehen_jobs.remove(drehen_jobs[0])
@@ -815,7 +829,7 @@ class Lernfabrik:
                     to_do = get_next_jobs(previously_done_jobs)
 
                     if len(drehen_jobs) > 0:
-                        nj = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), jobs)
+                        nj = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
                         to_do.append(nj)
                         yield self.env.process(self.parallel_job_execution(to_do))
 
@@ -829,8 +843,15 @@ class Lernfabrik:
                         to_do.clear()
                         bands += 1
                     else:
-                        for rest_jobs in jobs:
-                            yield self.env.process(self.series_job_execution([rest_jobs]))
+                        runnable_jobs = get_runnable_jobs(self.done_jobs, jobs)
+                        if len(runnable_jobs) == 0:
+                            yield self.env.timeout(1)  # move simulation forward by one second
+                        else:
+                            yield self.env.process(self.series_job_execution(runnable_jobs))
+
+                            for i in runnable_jobs:
+                                previously_done_jobs.append(i)
+                                jobs.remove(i)
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -920,7 +941,7 @@ class Lernfabrik:
                 else:
                     part_name = job.get_part_name()
                     amount_produced = get_output_per_part(part_name)
-                    yield self.env.process(self.do_job(job, part_name))
+                    yield self.env.process(self.do_job(job))
 
                     job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
@@ -1088,7 +1109,7 @@ order_8 = Order(25, 10)
 order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
-orders = [order_1]
+orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
