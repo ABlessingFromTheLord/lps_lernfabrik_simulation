@@ -470,6 +470,21 @@ def get_runnable_jobs(done_jobs, jobs_list):
     return to_return
 
 
+def get_depth(job_list):
+    # depth is defined as the amount of machines that can be run at the same time
+    # in contrast to degree which is the stage of a job in the sequence of execution
+    depth = 0
+
+    machines = []
+
+    for job in job_list:
+        if job.get_machine_required() not in machines:
+            machines.append(job.get_machine_required())
+            depth += 1
+
+    return depth
+
+
 def get_parallelization_1(jobs):
     # returns an array of arrays that indicate the jobs that can be executed in parallel
     # jobs in the same inner array need the same machine to be done, so they cannot be
@@ -807,25 +822,39 @@ class Lernfabrik:
                 print(job.get_name())
             print("\n")
 
+            depth = get_depth(jobs)
+
             previously_done_jobs = []
-            bands = 1
+            iteration = 1
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
                 # we are only starting out
-                if bands == 1:
+                if iteration == 1:
                     first_job = get_job_with_minimal_degree_by_part(
                         drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
                     yield self.env.process(self.series_job_execution([first_job]))
                     previously_done_jobs.append(first_job)
                     drehen_jobs.remove(drehen_jobs[0])
                     jobs.remove(first_job)
-                    bands += 1
+                    iteration += 1
 
                 else:
+                    current_depth = 0
                     to_do = get_next_jobs(previously_done_jobs)
 
+                    if len(to_do) > 0:
+                        current_depth += 1
+
                     if len(drehen_jobs) > 0:
-                        nj = get_job_with_minimal_degree_by_part(drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
-                        to_do.append(nj)
+                        # during the Drehen machine is running
+                        while current_depth < depth:
+                            nj = get_job_with_minimal_degree_by_part(
+                                drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
+
+                            if nj not in to_do:
+                                to_do.append(nj)
+
+                            current_depth += 1
+
                         yield self.env.process(self.parallel_job_execution(to_do))
 
                         # removing the jobs done
@@ -836,17 +865,30 @@ class Lernfabrik:
                             jobs.remove(i)
                         jobs = jobs[:]
                         to_do.clear()
-                        bands += 1
+                        iteration += 1
                     else:
                         runnable_jobs = get_runnable_jobs(self.done_jobs, jobs)
                         if len(runnable_jobs) == 0:
                             yield self.env.timeout(1)  # move simulation forward by one second
                         else:
-                            yield self.env.process(self.series_job_execution(runnable_jobs))
+                            # after the Drehen process
+                            current_depth = 0
+                            to_do = []
 
-                            for i in runnable_jobs:
+                            while current_depth < depth:
+                                for job in runnable_jobs:
+                                    # TODO: check if resource is not being used
+                                    if job.get_job_before() in self.done_jobs and job not in to_do:
+                                        to_do.append(job)
+                                    current_depth += 1
+
+                            yield self.env.process(self.parallel_job_execution(to_do))
+
+                            for i in to_do:
                                 previously_done_jobs.append(i)
                                 jobs.remove(i)
+
+            iteration = 0
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -1104,7 +1146,7 @@ order_8 = Order(25, 10)
 order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
-orders = [order_1]
+orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 env.process(fabric.fulfill_orders(orders))
 env.run(until=SIM_TIME)
 
