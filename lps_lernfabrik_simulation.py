@@ -355,9 +355,13 @@ def get_job_with_minimal_degree_by_part(part_name, done_jobs, jobs_to_be_done, d
         return get_job_with_minimal_degree(new_jobs)
 
     # some jobs have been done and there is one for part
-    if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity \
-            and jobs_copy[0].get_job_before() in done_jobs:
-        job_with_minimal_degree = jobs_copy[0]
+    if jobs_copy[0].get_job_before() is not None:
+        if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity \
+                and jobs_copy[0].get_job_before().get_completed() >= 1:
+            job_with_minimal_degree = jobs_copy[0]
+    else:
+        if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity:
+            job_with_minimal_degree = jobs_copy[0]
 
     # none was found since no proceeding job is in done jobs
     if job_with_minimal_degree is None:
@@ -538,8 +542,12 @@ def get_runnable_jobs(done_jobs, jobs_list):
     to_return = []
 
     for job in jobs_list:
-        if job.get_job_before() in done_jobs and job.get_machine_required().count < job.get_machine_required().capacity:
-            to_return.append(job)
+        if job.get_machine_required().count < job.get_machine_required().capacity:
+            if job.get_job_before() is None:
+                to_return.append(job)
+            else:
+                if job.get_job_before().get_completed() >= 1:
+                    to_return.append(job)
 
     return to_return
 
@@ -850,7 +858,7 @@ class Lernfabrik:
             self.env.process(self.series_job_execution([job]))
             yield self.env.timeout(0)
 
-    def fulfill_oder_with_parallelization(self, order_number, order):
+    def fulfill_with_parallelization(self, order_number, order):
         # received and order and fulfills it
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1146,7 +1154,7 @@ class Lernfabrik:
         prioritized_list = self.orders.order_by_priority()
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_oder_with_parallelization(
+            yield self.env.process(self.fulfill_with_parallelization(
                 order_number + 1, prioritized_list[order_number]))
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
