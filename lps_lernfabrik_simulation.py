@@ -319,18 +319,63 @@ def get_job_with_minimal_degree(job_list):
     return job_with_minimal_degree
 
 
-def get_job_with_minimal_degree_by_part(part_name, done_jobs, job_list):
+def get_job_with_minimal_degree_by_part(part_name, done_jobs, jobs_to_be_done, drehen_sequence, job_list):
     # returns the job with the minimal degree, ie, the job that should be executed first
-    job_with_minimal_degree = None
+    # this should also take into account that the machine needed to run this job is free
     jobs_copy = [x for x in job_list if x.get_part_name() == part_name]
+    job_with_minimal_degree = None
 
-    for i in range(len(jobs_copy)):
-        if i == 0:
+    # machine for part is already added, no need to look for another job
+    for job in jobs_to_be_done:
+        if job.get_part_name() == part_name:
+            return None
+
+    # just starting, no done jobs. getting jobs before can be disregarded
+    if len(done_jobs) == 0:
+        job_with_minimal_degree = jobs_copy[0]
+
+        for job in jobs_copy:
+            if job.get_degree() < job_with_minimal_degree.get_degree():
+                job_with_minimal_degree = job
+        return job_with_minimal_degree
+
+    # some jobs have already been done, but there is no corresponding job for part
+    if len(jobs_copy) == 0:
+        index_for_old_part = drehen_sequence.index(part_name)
+
+        if index_for_old_part + 1 >= len(drehen_sequence):
+            return None
+
+        new_part = drehen_sequence[index_for_old_part + 1]
+
+        if new_part == part_name:
+            return None
+
+        return get_job_with_minimal_degree_by_part(new_part,
+                                                   done_jobs, jobs_to_be_done, drehen_sequence, job_list)
+
+    # some jobs have been done and there is one for part
+    if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity \
+            and jobs_copy[0].get_job_before() in done_jobs:
+        job_with_minimal_degree = jobs_copy[0]
+
+    # none was found since no proceeding job is in done jobs
+    if job_with_minimal_degree is None:
+        for job in jobs_copy:
+            if job.get_machine_required().count < job.get_machine_required().capacity:
+                job_with_minimal_degree = job
+                break
+
+    # Machines for all parts are busy
+    if job_with_minimal_degree is None:
+        return None
+
+    # at least one part has machines free and looking for job with minimal degree is possible
+    for i in range(1, len(jobs_copy)):
+        if (jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree()
+            and jobs_copy[i].get_job_before() in done_jobs) \
+                and jobs_copy[i].get_machine_required().count < jobs_copy[i].get_machine_required().capacity:
             job_with_minimal_degree = jobs_copy[i]
-        else:
-            if (jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree()
-                    and jobs_copy[i].get_job_before() in done_jobs):
-                job_with_minimal_degree = jobs_copy[i]
 
     return job_with_minimal_degree
 
@@ -345,6 +390,17 @@ def get_job_with_degree(job_list, degree):
             break
 
     return job_to_return
+
+
+def check_machine_availability(jobs_to_be_done, job):
+    # checks if the job to be done does not coincide with another job that needs the same machinery
+    # this is before execution
+
+    for i in jobs_to_be_done:
+        if i.get_machine_required() == job.get_machine_required():
+            return False
+
+    return True
 
 
 def get_equipping_time(job_1, job_2):
@@ -461,11 +517,8 @@ def get_runnable_jobs(done_jobs, jobs_list):
     to_return = []
 
     for job in jobs_list:
-        if job.get_degree() == 0:
+        if job.get_job_before() in done_jobs and job.get_machine_required().count < job.get_machine_required().capacity:
             to_return.append(job)
-        else:
-            if job.get_job_before() in done_jobs:
-                to_return.append(job)
 
     return to_return
 
@@ -523,7 +576,8 @@ def get_next_jobs(jobs_list):
     next_jobs = []
 
     for job in jobs_list:
-        if job.get_completed() >= 1 and job.get_job_after() is not None:
+        if (job.get_completed() >= 1 and job.get_job_after()
+                and job.get_machine_required().count < job.get_machine_required().capacity):
             next_jobs.append(job.get_job_after())
 
     return next_jobs
@@ -776,6 +830,9 @@ class Lernfabrik:
         remaining_unilokk = UNILOKK_COUNT
         UNILOKK_COUNT = 0
 
+        if order is None:
+            return
+
         # need to produce if our order exceeds what is available
         if order.amount > remaining_unilokk:
             working_order = order.amount - remaining_unilokk  # actual order needed to be produced
@@ -812,6 +869,10 @@ class Lernfabrik:
             other_jobs = [x for x in jobs if x.get_machine_required() != machine_gz200]
             drehen_jobs = sort_drehjobs_by_minimal_runtime(drehen_jobs)
 
+            drehen_sequence = []
+            for job in drehen_jobs:
+                drehen_sequence.append(job.get_part_name())
+
             # add jobs in jobs array in the right order in which Drehen jobs are to be executed
             jobs.clear()
             jobs.extend(other_jobs)
@@ -823,72 +884,73 @@ class Lernfabrik:
             print("\n")
 
             depth = get_depth(jobs)
-
             previously_done_jobs = []
-            iteration = 1
+            iteration = 0
+
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
                 # we are only starting out
-                if iteration == 1:
+                if iteration == 0:
                     first_job = get_job_with_minimal_degree_by_part(
-                        drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
+                        drehen_jobs[0].get_part_name(), self.done_jobs, [], drehen_sequence, jobs)
                     yield self.env.process(self.series_job_execution([first_job]))
                     previously_done_jobs.append(first_job)
-                    drehen_jobs.remove(drehen_jobs[0])
                     jobs.remove(first_job)
                     iteration += 1
 
                 else:
                     current_depth = 0
-                    to_do = get_next_jobs(previously_done_jobs)
+                    to_do = []
 
-                    if len(to_do) > 0:
+                    # if there is a previously done job whose next job can be done
+                    nj = get_next_jobs(previously_done_jobs)
+                    if len(nj) > 0:
+                        for job in nj:
+                            if (job not in to_do and current_depth < depth and
+                                    check_machine_availability(to_do, job)):
+                                to_do.append(job)
+                                jobs.remove(job)
+                                current_depth += 1
+
+                    # if there is a job that is ready to run
+                    nj = get_runnable_jobs(self.done_jobs, jobs)
+                    if len(nj) > 0:
+                        for job in nj:
+                            if (job not in to_do and current_depth < depth
+                                    and check_machine_availability(to_do, job)):
+                                to_do.append(job)
+                                jobs.remove(job)
+                                current_depth += 1
+
+                    # find the next runnable job with minimal degree whose resource is free
+                    if iteration >= len(drehen_sequence):
+                        iteration = 1
+
+                    if len(drehen_sequence) == 1:
+                        iteration = 0
+
+                    dreh = drehen_jobs[iteration]
+
+                    next_job = get_job_with_minimal_degree_by_part(
+                        dreh.get_part_name(), self.done_jobs, to_do, drehen_sequence, jobs)
+
+                    if next_job is not None and next_job not in to_do and current_depth < depth \
+                            and next_job.get_machine_required().count < next_job.get_machine_required().capacity:
+                        to_do.append(next_job)
+                        jobs.remove(next_job)
                         current_depth += 1
 
-                    if len(drehen_jobs) > 0:
-                        # during the Drehen machine is running
-                        while current_depth < depth:
-                            nj = get_job_with_minimal_degree_by_part(
-                                drehen_jobs[0].get_part_name(), self.done_jobs, jobs)
-
-                            if nj not in to_do:
-                                to_do.append(nj)
-
-                            current_depth += 1
-
+                    # out of while loop
+                    # do the jobs in parallel
+                    if len(to_do) > 0:
                         yield self.env.process(self.parallel_job_execution(to_do))
 
-                        # removing the jobs done
                         previously_done_jobs.clear()
-                        drehen_jobs.remove(drehen_jobs[0])
-                        for i in to_do:
-                            previously_done_jobs.append(i)
-                            jobs.remove(i)
-                        jobs = jobs[:]
-                        to_do.clear()
+                        previously_done_jobs.extend(to_do)
                         iteration += 1
+
                     else:
-                        runnable_jobs = get_runnable_jobs(self.done_jobs, jobs)
-                        if len(runnable_jobs) == 0:
-                            yield self.env.timeout(1)  # move simulation forward by one second
-                        else:
-                            # after the Drehen process
-                            current_depth = 0
-                            to_do = []
-
-                            while current_depth < depth:
-                                for job in runnable_jobs:
-                                    # TODO: check if resource is not being used
-                                    if job.get_job_before() in self.done_jobs and job not in to_do:
-                                        to_do.append(job)
-                                    current_depth += 1
-
-                            yield self.env.process(self.parallel_job_execution(to_do))
-
-                            for i in to_do:
-                                previously_done_jobs.append(i)
-                                jobs.remove(i)
-
-            iteration = 0
+                        yield self.env.timeout(1)
+                        iteration += 1
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -1008,7 +1070,16 @@ class Lernfabrik:
 
             self.done_jobs.clear()
 
-            print("Order fulfilled completely\n\n")
+            print("Order fulfilled completely\n")
+
+            print("Remaining parts ")
+            print("OBERTEIL ", OBERTEIL_COUNT)
+            print("UNTERTEIL ", UNTERTEIL_COUNT)
+            print("HALTETEIL ", HALTETEIL_COUNT)
+            print("RING ", RING_COUNT)
+            print("\n")
+            # printing remaining parts
+
         else:
             self.done_jobs.clear()
 
@@ -1148,7 +1219,7 @@ order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 env.process(fabric.fulfill_orders(orders))
-env.run(until=SIM_TIME)
+env.run(until=2*SIM_TIME)
 
 # analysis and results
 print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
