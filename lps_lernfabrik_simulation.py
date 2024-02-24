@@ -706,8 +706,6 @@ class Lernfabrik:
                   " to ", job.get_name(), " is ", equipping_time)
             print("\n")
 
-
-
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
 
@@ -923,8 +921,7 @@ class Lernfabrik:
             print("Order unfulfilled\n\n")
 
     def fulfill_order_with_opt(self, order_number, order):
-        # received and order and fulfills it
-        # before this method Ruestungszeit was 19800 (running all jobs in jobs list)
+        # received and order and fulfills it, but first it optimizes the Ruestungszeit
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
         UNILOKK_COUNT = 0
@@ -1082,7 +1079,7 @@ class Lernfabrik:
         self.start_time = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_with_parallelization(
+            yield self.env.process(self.fulfill_order_with_opt(
                 order_number + 1, prioritized_list[order_number]))
 
         self.duration = self.env.now - self.start_time
