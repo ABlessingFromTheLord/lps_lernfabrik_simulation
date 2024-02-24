@@ -2,6 +2,7 @@ import math
 import simpy
 import numpy
 import sqlite3
+from decimal import Decimal
 from Job import Job
 from Order import Order
 from OrderList import OrderList
@@ -124,6 +125,21 @@ def get_cumulative_quality_grade(part_name):
             return 1 * 0.98 * 0.98
         case "Ring":
             return 1 * 0.98 * 1
+
+
+def get_human_error_by_part(loss_ratio, part_name):
+    # a combined (1- 0.84) * amount is the human error
+    # since different parts come in different quantities, use ratio to this amount
+
+    match part_name:
+        case "Oberteil":
+            return Decimal(17 / 174) * loss_ratio
+        case "Unterteil":
+            return Decimal(11 / 174) * loss_ratio
+        case "Halteteil":
+            return Decimal(49 / 174) * loss_ratio
+        case "Ring":
+            return Decimal(97 / 174) * loss_ratio
 
 
 def get_output_per_part(part_name):
@@ -432,6 +448,22 @@ def get_equipping_time(job_1, job_2):
         return 0
 
 
+def get_transport_time_between_machines(part_name, machine):
+    # returns the time taken to transport a part from previous machine to this one
+    if machine == machine_jaespa:
+        return 60  # 60 seconds are needed to get to the saw from the lager
+    elif machine == machine_gz200:
+        return 20  # 20 seconds are needed from the saw to the Lathe machine
+    elif machine == machine_fz12:
+        return 30  # 30 seconds are needed to the milling machine
+    elif machine == machine_arbeitsplatz_at_gz200:
+        return 0  # work done at GZ200 hence no transport
+    elif machine == machine_arbeitsplatz_2 and part_name == "Oberteil":
+        return 50  # 50 seconds are needed from the  milling machine to Arbeitsplatz 2
+    elif machine == machine_arbeitsplatz_2 and part_name != "Oberteil":
+        return 70  # 70 seconds are needed from the GZ200 to Arbeitsplatz 2
+
+
 def get_next_job_with_minimal_runtime(job, job_list):
     # returns the next Drehjob that should be run after this one to get minimal equipping times
     next_job = job_list[0]
@@ -641,7 +673,6 @@ class Lernfabrik:
         self.done_jobs = []
         self.stop_simulation = False
 
-    # TODO: look into how to best implement this
     def time_management(self):
         # checks the time and day in which we are
 
@@ -708,16 +739,11 @@ class Lernfabrik:
 
     def do_job(self, job):
         # performs a certain job as subprocess in part creation process
-        # simulating transport time between machines
-        if job.get_machine_required() == machine_jaespa:
-            yield self.env.timeout(60)  # 60 seconds are needed to get to the saw from the lager
-        elif job.get_machine_required() == machine_gz200:
-            yield self.env.timeout(20)  # 20 seconds are needed from the saw to the Lathe machine
-        elif job.get_machine_required() == machine_fz12:
-            yield self.env.timeout(50)  # 50 seconds are needed to the milling machine
-
         # getting values for use
         required_machine = job.get_machine_required()
+        transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
+        yield self.env.timeout(transport_time)
+
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
 
@@ -725,7 +751,6 @@ class Lernfabrik:
             print("\n")
             print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
                   " to ", job.get_name(), " is ", equipping_time)
-            print("\n")
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
@@ -771,16 +796,21 @@ class Lernfabrik:
             if all_jobs_completed_for_part(part_name):
                 #  all machines required to produce a part have been operated part is created
                 # defected parts due to machine error
-                machine_caused_defects = 1 - get_cumulative_quality_grade(part_name)
-                # defected parts due to human error, i.e, in the Kleben, Montage, Pruefen and Verpacken processes
-                human_caused_defects = (1 - 0.84)
-                # To cater for non-determinism in the production process, we offset by producing further 5% more
-                non_deterministic_offset = 0.05
+                machine_caused_defects = 1 - Decimal(get_cumulative_quality_grade(part_name))
 
-                # to compensate for the defected parts due to machine's quality grade,
-                # we produce (100% of order + errors) to offset the ones that may be defected
-                amount_produced *= (1 + machine_caused_defects + human_caused_defects + non_deterministic_offset)
-                increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
+                # defected parts due to human error, i.e, in the Kleben, Montage, Pruefen and Verpacken processes
+                machine_loss = math.ceil(amount_produced * machine_caused_defects)
+
+                # offset loss due to machine errors
+                amount_produced += machine_loss
+
+                human_caused_defects = Decimal(get_human_error_by_part(machine_caused_defects, part_name))
+                human_loss = math.ceil(amount_produced * human_caused_defects)
+
+                # offset loss due to human errors
+                amount_produced += human_loss
+
+                increase_part_count(part_name, amount_produced)  # add newly created part
 
                 print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
 
@@ -1051,18 +1081,22 @@ class Lernfabrik:
                     if all_jobs_completed_for_part(part_name):
                         #  all machines required to produce a part have been operated part is created
                         # defected parts due to machine error
-                        machine_caused_defects = 1 - get_cumulative_quality_grade(part_name)
+                        machine_caused_defects = 1 - Decimal(get_cumulative_quality_grade(part_name))
+
                         # defected parts due to human error, i.e, in the Kleben, Montage,
                         # Pruefen and Verpacken processes
-                        human_caused_defects = (1 - 0.84)
-                        # To cater for non-determinism in the production process, we offset by producing further 5% more
-                        non_deterministic_offset = 0.05
+                        machine_loss = math.ceil(amount_produced * machine_caused_defects)
 
-                        # to compensate for the defected parts due to machine's quality grade,
-                        # we produce (100% of order + errors) to offset the ones that may be defected
-                        amount_produced *= (
-                                    1 + machine_caused_defects + human_caused_defects + non_deterministic_offset)
-                        increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
+                        # offset loss due to machine errors
+                        amount_produced += machine_loss
+
+                        human_caused_defects = Decimal(get_human_error_by_part(machine_caused_defects, part_name))
+                        human_loss = math.ceil(amount_produced * human_caused_defects)
+
+                        # offset loss due to human errors
+                        amount_produced += human_loss
+
+                        increase_part_count(part_name, amount_produced)  # add newly created part
 
                         print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
 
