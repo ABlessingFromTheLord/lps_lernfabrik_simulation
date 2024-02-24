@@ -632,10 +632,24 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.start_time = None
         self.duration = None
+        self.shift = self.env.now  # to keep track of shifts
+        self.day = 1  # to keep track of day
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.stop_simulation = False
+
+    # TODO: look into how to best implement this
+    def time_management(self):
+        # checks the time and day in which we are
+
+        if self.env.now - (self.day * 28800) > 0:
+            print("\n SCHÖNES FEIERABEND! \n")
+            yield self.env.timeout(57600)  # 8-hour shift over, so 16 hours of no work till next day
+            self.day += 1
+        else:
+            yield self.env.timeout(0)
 
     # operation
     def operation(self, machine, operating_time, job_name):
@@ -671,7 +685,7 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while True:
+        while not self.stop_simulation:
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
             yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
@@ -706,8 +720,6 @@ class Lernfabrik:
                   " to ", job.get_name(), " is ", equipping_time)
             print("\n")
 
-
-
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
 
@@ -734,6 +746,8 @@ class Lernfabrik:
             # all other parts need the GZ200 as end machine hence can be grouped in else
             # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
             yield self.env.timeout(70)
+
+        yield self.env.process(self.time_management())
 
     def series_job_execution(self, jobs_in_series):
         # called n times to execute the rest of the jobs that cannot be parallelized
@@ -916,11 +930,11 @@ class Lernfabrik:
 
             self.done_jobs.clear()
 
-            print("Order fulfilled completely\n\n")
+            print(f"Order fulfilled completely at {self.env.now}, which is day {self.day} \n\n")
         else:
             self.done_jobs.clear()
 
-            print("Order unfulfilled\n\n")
+            print(f"Order unfulfilled at {self.env.now} which is day {self.day} \n\n")
 
     def fulfill_order_with_opt(self, order_number, order):
         # received and order and fulfills it
@@ -1087,6 +1101,7 @@ class Lernfabrik:
 
         self.duration = self.env.now - self.start_time
         print("Fulfilling orders took ", self.duration, " units of time")
+        self.stop_simulation = True
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
@@ -1183,8 +1198,22 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
+ordered_list = OrderList()
+copy_orders = orders[:]
+ordered_list.receive_order(copy_orders)
+prio_list = ordered_list.order_by_priority()
+new_list = []
+
+while len(prio_list) > 1:
+    new_list.append(Order(prio_list[0].amount + prio_list[1].amount, prio_list[1].delivery_date))
+    prio_list.remove(prio_list[0])
+    prio_list.remove(prio_list[0])
+
+if len(prio_list) == 1:
+    new_list.append(prio_list[0])
+
 env.process(fabric.fulfill_orders(orders))
-env.run(until=2*SIM_TIME)
+env.run()
 
 # analysis and results
 print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
