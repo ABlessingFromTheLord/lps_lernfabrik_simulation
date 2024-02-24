@@ -5,7 +5,6 @@ import sqlite3
 from Job import Job
 from Order import Order
 from OrderList import OrderList
-from pymoo.core.problem import Problem
 
 # global variables
 # breaking probability
@@ -544,86 +543,6 @@ def get_parts_needed(order):
     return [OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]
 
 
-def clear_stats():
-    global OBERTEIL_COUNT
-    OBERTEIL_COUNT = 0
-    global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT = 0
-    global HALTETEIL_COUNT
-    HALTETEIL_COUNT = 0
-    global RING_COUNT
-    RING_COUNT = 0
-
-    global UNILOKK_COUNT
-    UNILOKK_COUNT = 0
-    global RUESTUNGS_ZEIT
-    RUESTUNGS_ZEIT = 0
-
-
-def adjust(genes):
-    # if the machine capacity greater than order, genes are always zero
-    # this method adjusts that to make sure if that's the case, then the
-    # machine is run at least once
-    # other use case of the method is to round up
-    copy = []
-    for k in range(len(genes)):
-        if 0 < genes[k] < 1:
-            genes[k] = 1
-            copy.append(int(genes[k]))
-        else:
-            genes[k] = math.ceil(genes[k])
-            copy.append(int(genes[k]))
-    return copy
-
-
-def fill_with_zeroes(array, n):
-    # returns an array appended with zeroes to the length n
-    # useful so all arrays have same dimension later in optimization algorithm
-    while len(array) < n:
-        array.append(0)
-    return array
-
-
-# optimization problem definition
-class ExecutionAmounts(Problem):
-    def __init__(self):
-        super().__init__(n_var=4, n_obj=1, n_constr=0, xl=numpy.array([0, 0, 0, 0]),
-                         xu=numpy.array([OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]))
-
-    def _evaluate(self, x, out, *args, **kwargs):
-        total_oberteil = numpy.zeros(len(x))
-        total_unterteil = numpy.zeros(len(x))
-        total_halteteil = numpy.zeros(len(x))
-        total_ring = numpy.zeros(len(x))
-
-        for m in range(len(x)):
-            if OBERTEIL_COUNT == 0 and x[m, 0] == 0:
-                total_oberteil[m] = 1
-            elif x[m, 0] > 0:
-                total_oberteil[m] = OBERTEIL_PRODUCTION * x[m, 0]
-
-            if UNTERTEIL_COUNT == 0 and x[m, 1] == 0:
-                total_oberteil[m] = 1
-            elif x[m, 1] > 0:
-                total_unterteil[m] = UNTERTEIL_PRODUCTION * x[m, 1]
-
-            if HALTETEIL_COUNT == 0 and x[m, 2] == 0:
-                total_halteteil[m] = 1
-            elif x[m, 2] > 0:
-                total_halteteil[m] = HALTETEIL_PRODUCTION * x[m, 2]
-
-            if RING_COUNT == 0 and x[m, 3] == 0:
-                total_ring[m] = 1
-            elif x[m, 3] > 0:
-                total_ring[m] = RING_PRODUCTION * x[m, 3]
-
-        fitness = (numpy.abs(total_oberteil - OBERTEIL_ORDER) + numpy.abs(total_unterteil - UNTERTEIL_ORDER) +
-                   numpy.abs(total_halteteil - HALTETEIL_ORDER) + numpy.abs(total_ring - RING_ORDER))
-
-        out["F"] = fitness[:, None]  # Reshape to match the expected shape
-        out["G"] = numpy.zeros((len(x), 0))  # No constraints for now
-
-
 # simulation class
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
@@ -705,8 +624,6 @@ class Lernfabrik:
             print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
                   " to ", job.get_name(), " is ", equipping_time)
             print("\n")
-
-
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
@@ -807,95 +724,8 @@ class Lernfabrik:
                 print(job.get_name())
             print("\n")
 
-            amount_of_jobs_to_be_done = len(jobs)
-
-            # getting the minimal order for the Drehjobs
-            drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            other_jobs = [x for x in jobs if x.get_machine_required() != machine_gz200]
-            drehen_jobs = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, drehen_jobs)
-
-            drehen_sequence = []
-            for job in drehen_jobs:
-                drehen_sequence.append(job.get_part_name())
-
-            # add jobs in jobs array in the right order in which Drehen jobs are to be executed
-            jobs.clear()
-            jobs.extend(other_jobs)
-
-            print("\norder of Drehen jobs:")
-            for job in drehen_jobs:
-                print(job.get_name())
-            print("\n")
-
-            depth = get_depth(jobs)
-            previously_done_jobs = []
-            iteration = 0
-            current_dreh_job = 0
-
-            while len(self.done_jobs) < amount_of_jobs_to_be_done:
-                # we are only starting out
-                if iteration == 0:
-                    first_job = get_job_with_minimal_degree_by_part(
-                        drehen_jobs[current_dreh_job].get_part_name(), self.done_jobs, [], drehen_sequence, jobs)
-                    yield self.env.process(self.series_job_execution([first_job]))
-                    previously_done_jobs.append(first_job)
-                    jobs.remove(first_job)
-                    iteration += 1
-                    current_dreh_job += 1
-
-                else:
-                    current_depth = 0
-                    to_do = []
-
-                    # check if the machine GZ200 is free, if yes run the next drehen job
-                    if machine_gz200.count < machine_gz200.capacity and len(drehen_jobs) > 0:
-                        to_do.append(drehen_jobs[0])
-                        drehen_jobs.remove(drehen_jobs[0])
-                        current_depth += 1
-
-                    # if there is a job that is ready to run
-                    nj = get_runnable_jobs(jobs)
-                    if len(nj) > 0:
-                        for job in nj:
-                            if (job not in to_do and current_depth < depth
-                                    and check_machine_availability(to_do, job)):
-                                to_do.append(job)
-                                jobs.remove(job)
-                                current_depth += 1
-
-                    # find the next runnable job with minimal degree whose resource is free
-                    if iteration >= len(drehen_sequence):
-                        iteration = 1
-
-                    if len(drehen_sequence) == 1:
-                        iteration = 0
-
-                    next_job = None
-                    if len(drehen_jobs) > 0:
-                        last_drehen = drehen_jobs[0].get_part_name()
-                        index_drehen = drehen_sequence.index(last_drehen)
-
-                        next_job = get_job_with_minimal_degree_by_part(
-                            drehen_sequence[index_drehen], self.done_jobs, to_do, drehen_sequence, jobs)
-
-                    if next_job is not None and next_job not in to_do and current_depth < depth \
-                            and next_job.get_machine_required().count < next_job.get_machine_required().capacity:
-                        to_do.append(next_job)
-                        jobs.remove(next_job)
-                        current_depth += 1
-
-                    # out of while loop
-                    # do the jobs in parallel
-                    if len(to_do) > 0:
-                        yield self.env.process(self.parallel_job_execution(to_do))
-
-                        previously_done_jobs.clear()
-                        previously_done_jobs.extend(to_do)
-                        iteration += 1
-
-                    else:
-                        yield self.env.timeout(1)
-                        iteration += 1
+            # executing jobs in series
+            yield self.env.process(self.series_job_execution(jobs))
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
