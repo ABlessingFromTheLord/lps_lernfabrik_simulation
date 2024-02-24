@@ -6,7 +6,6 @@ from Job import Job
 from Order import Order
 from OrderList import OrderList
 from pymoo.core.problem import Problem
-import numpy as np
 
 # global variables
 # breaking probability
@@ -595,14 +594,14 @@ def fill_with_zeroes(array, n):
 # optimization problem definition
 class ExecutionAmounts(Problem):
     def __init__(self):
-        super().__init__(n_var=4, n_obj=1, n_constr=0, xl=np.array([0, 0, 0, 0]),
-                         xu=np.array([OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]))
+        super().__init__(n_var=4, n_obj=1, n_constr=0, xl=numpy.array([0, 0, 0, 0]),
+                         xu=numpy.array([OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]))
 
     def _evaluate(self, x, out, *args, **kwargs):
-        total_oberteil = np.zeros(len(x))
-        total_unterteil = np.zeros(len(x))
-        total_halteteil = np.zeros(len(x))
-        total_ring = np.zeros(len(x))
+        total_oberteil = numpy.zeros(len(x))
+        total_unterteil = numpy.zeros(len(x))
+        total_halteteil = numpy.zeros(len(x))
+        total_ring = numpy.zeros(len(x))
 
         for m in range(len(x)):
             if OBERTEIL_COUNT == 0 and x[m, 0] == 0:
@@ -625,11 +624,11 @@ class ExecutionAmounts(Problem):
             elif x[m, 3] > 0:
                 total_ring[m] = RING_PRODUCTION * x[m, 3]
 
-        fitness = (np.abs(total_oberteil - OBERTEIL_ORDER) + np.abs(total_unterteil - UNTERTEIL_ORDER) +
-                   np.abs(total_halteteil - HALTETEIL_ORDER) + np.abs(total_ring - RING_ORDER))
+        fitness = (numpy.abs(total_oberteil - OBERTEIL_ORDER) + numpy.abs(total_unterteil - UNTERTEIL_ORDER) +
+                   numpy.abs(total_halteteil - HALTETEIL_ORDER) + numpy.abs(total_ring - RING_ORDER))
 
         out["F"] = fitness[:, None]  # Reshape to match the expected shape
-        out["G"] = np.zeros((len(x), 0))  # No constraints for now
+        out["G"] = numpy.zeros((len(x), 0))  # No constraints for now
 
 
 # simulation class
