@@ -584,13 +584,6 @@ def fill_with_zeroes(array, n):
     return array
 
 
-# optimization
-# submit order
-
-# submit order and run algorithm
-# submit_order([1, 3, 4, 2, 6, 1])  # each index is a customer number
-
-
 # optimization problem definition
 class ExecutionAmounts(Problem):
     def __init__(self):
@@ -653,7 +646,9 @@ class Lernfabrik:
             start = self.env.now
             try:
                 print(f"execution time of {job_name} is {operating_time} seconds, started execution at {self.env.now}")
+
                 yield self.env.timeout(operating_time)  # running operation
+
                 self.process = None
                 operating_time = 0
                 print(f"finish time is {self.env.now} seconds")
@@ -668,6 +663,7 @@ class Lernfabrik:
                 # deviation of 30 seconds
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
+
                 print(f"remaining time for operation {operating_time} seconds, continues at {self.env.now}")
 
                 self.currently_broken = False
@@ -711,8 +707,10 @@ class Lernfabrik:
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
             yield self.env.timeout(equipping_time)
+
             self.process = self.env.process(self.operation(
                 required_machine, operating_time, job.get_name()))  # operating machinery
+
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
             yield self.process
 
@@ -732,11 +730,16 @@ class Lernfabrik:
 
             if all_jobs_completed_for_part(part_name):
                 #  all machines required to produce a part have been operated part is created
-                total_defected_parts = 1 - get_cumulative_quality_grade(part_name)
+                # defected parts due to machine error
+                machine_caused_defects = 1 - get_cumulative_quality_grade(part_name)
+                # defected parts due to human error, i.e, in the Kleben, Montage, Pruefen and Verpacken processes
+                human_caused_defects = (1 - 0.84)
+                # To cater for non-determinism in the production process, we offset by producing further 5% more
+                non_deterministic_offset = 0.05
 
                 # to compensate for the defected parts due to machine's quality grade,
-                # we produce (100% of order + cumulative quality grade)
-                amount_produced *= (1 + total_defected_parts)
+                # we produce (100% of order + errors) to offset the ones that may be defected
+                amount_produced *= (1 + machine_caused_defects + human_caused_defects + non_deterministic_offset)
                 increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
 
                 print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
@@ -879,6 +882,10 @@ class Lernfabrik:
         # assembling parts
         yield self.env.process(self.finish_unilokk_creation())
 
+        # Kleben, Montage, Pruefen and Verpacken have a combined quality grade of 0.84
+        # hence we multiply our amount by this factor
+        UNILOKK_COUNT = math.floor(UNILOKK_COUNT * 0.84)
+
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
@@ -969,11 +976,18 @@ class Lernfabrik:
 
                     if all_jobs_completed_for_part(part_name):
                         #  all machines required to produce a part have been operated part is created
-                        total_defected_parts = 1 - get_cumulative_quality_grade(part_name)
+                        # defected parts due to machine error
+                        machine_caused_defects = 1 - get_cumulative_quality_grade(part_name)
+                        # defected parts due to human error, i.e, in the Kleben, Montage,
+                        # Pruefen and Verpacken processes
+                        human_caused_defects = (1 - 0.84)
+                        # To cater for non-determinism in the production process, we offset by producing further 5% more
+                        non_deterministic_offset = 0.05
 
                         # to compensate for the defected parts due to machine's quality grade,
-                        # we produce (100% of order + cumulative quality grade)
-                        amount_produced *= (1 + total_defected_parts)
+                        # we produce (100% of order + errors) to offset the ones that may be defected
+                        amount_produced *= (
+                                    1 + machine_caused_defects + human_caused_defects + non_deterministic_offset)
                         increase_part_count(part_name, math.floor(amount_produced))  # add newly created part
 
                         print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
