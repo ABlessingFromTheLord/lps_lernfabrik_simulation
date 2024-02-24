@@ -40,6 +40,7 @@ HALTETEIL_COUNT = 0
 RING_COUNT = 0
 
 ORDERS_FULFILLED = 0
+DEADLINES_MET = 0
 
 # ruestungszeit
 RUESTUNGS_ZEIT = 0
@@ -632,7 +633,7 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.start_time = None
         self.duration = None
-        self.shift = self.env.now  # to keep track of shifts
+        self.shift_track = 28800  # to keep track of shifts, 8 hour intervals
         self.day = 1  # to keep track of day
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
@@ -644,8 +645,9 @@ class Lernfabrik:
     def time_management(self):
         # checks the time and day in which we are
 
-        if self.env.now - (self.day * 28800) > 0:
-            print("\n SCHÖNES FEIERABEND! \n")
+        if self.env.now >= self.shift_track:
+            print(f"\n SCHÖNES FEIERABEND! time {self.env.now}\n")
+            self.shift_track += 28800
             yield self.env.timeout(57600)  # 8-hour shift over, so 16 hours of no work till next day
             self.day += 1
         else:
@@ -782,6 +784,36 @@ class Lernfabrik:
         for job in jobs_in_parallel:
             self.env.process(self.series_job_execution([job]))
             yield self.env.timeout(0)
+
+    def finish_unilokk_creation(self):
+        # simulates the Kleben, Montage, Pruefen and Verpacken processes
+        # after parts have been created
+        print("\nFinishing process has started")
+
+        n = 1
+        # then assemble them into Unilokk
+        while True:
+            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180, "finishing process"))
+
+                # decrement for the parts used above to create a whole Unilokk
+                decrease_part_count(OBERTEIL)
+                decrease_part_count(UNTERTEIL)
+                decrease_part_count(HALTETEIL)
+                decrease_part_count(RING)
+
+                # increase Unilokk count for the one that is created
+                global UNILOKK_COUNT
+                UNILOKK_COUNT = UNILOKK_COUNT + 1
+
+                # simulating transporting the unilokk to the warehouse, 20 seconds are needed
+                yield self.env.timeout(20)
+
+                print("unilokk ", n, " was created at ", self.env.now, "\n")
+                n = n + 1
+
+            else:
+                break
 
     def fulfill_with_parallelization(self, order_number, order):
         # received and order and fulfills it
@@ -928,6 +960,10 @@ class Lernfabrik:
             global ORDERS_FULFILLED
             ORDERS_FULFILLED += 1
 
+            if self.day <= order.delivery_date:
+                global DEADLINES_MET
+                DEADLINES_MET += 1
+
             self.done_jobs.clear()
 
             print(f"Order fulfilled completely at {self.env.now}, which is day {self.day} \n\n")
@@ -1038,6 +1074,10 @@ class Lernfabrik:
             global ORDERS_FULFILLED
             ORDERS_FULFILLED += 1
 
+            if self.day <= order.delivery_date:
+                global DEADLINES_MET
+                DEADLINES_MET += 1
+
             self.done_jobs.clear()
 
             print("Order fulfilled completely\n")
@@ -1054,36 +1094,6 @@ class Lernfabrik:
             self.done_jobs.clear()
 
             print("Order unfulfilled\n\n")
-
-    def finish_unilokk_creation(self):
-        # simulates the Kleben, Montage, Pruefen and Verpacken processes
-        # after parts have been created
-        print("\nFinishing process has started")
-
-        n = 1
-        # then assemble them into Unilokk
-        while True:
-            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180, "finishing process"))
-
-                # decrement for the parts used above to create a whole Unilokk
-                decrease_part_count(OBERTEIL)
-                decrease_part_count(UNTERTEIL)
-                decrease_part_count(HALTETEIL)
-                decrease_part_count(RING)
-
-                # increase Unilokk count for the one that is created
-                global UNILOKK_COUNT
-                UNILOKK_COUNT = UNILOKK_COUNT + 1
-
-                # simulating transporting the unilokk to the warehouse, 20 seconds are needed
-                yield self.env.timeout(20)
-
-                print("unilokk ", n, " was created at ", self.env.now, "\n")
-                n = n + 1
-
-            else:
-                break
 
     def fulfill_orders(self, orders_list):
         # the whole process from part creation to order fulfillment
@@ -1104,6 +1114,7 @@ class Lernfabrik:
         self.stop_simulation = True
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
+        print("\nDeadlines met:", DEADLINES_MET, "/", len(prioritized_list))
 
 
 # instantiate object of Lernfabrik class
