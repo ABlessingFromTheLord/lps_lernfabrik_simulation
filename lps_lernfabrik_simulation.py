@@ -279,32 +279,6 @@ def get_parts_by_sequence(sequence):
     return to_return
 
 
-def get_job_keys(job):
-    # returns a custom assigned key to a job to help in sorting process before
-    # batching jobs together to minimize Ruestungszeit
-    match job.get_name():
-        case "Oberteil_Saegen":
-            return 1
-        case "Oberteil_Drehen":
-            return 2
-        case "Oberteil_Fraesen":
-            return 3
-        case "Unterteil_Saegen":
-            return 4
-        case "Unterteil_Drehen":
-            return 5
-        case "Halteteil_Saegen":
-            return 6
-        case "Halteteil_Drehen":
-            return 7
-        case "Ring_Saegen":
-            return 8
-        case "Ring_Drehen":
-            return 9
-        case "Ring_Senken":
-            return 10
-
-
 def get_job_with_minimal_degree(job_list):
     # returns the job with the minimal degree, ie, the job that should be executed first
     job_with_minimal_degree = None
@@ -382,18 +356,6 @@ def get_job_with_minimal_degree_by_part(part_name, done_jobs, jobs_to_be_done, d
             job_with_minimal_degree = jobs_copy[i]
 
     return job_with_minimal_degree
-
-
-def get_job_with_degree(job_list, degree):
-    # returns the job with the specified degree, if not found it returns None
-    job_to_return = None
-
-    for job in job_list:
-        if job.get_degree() == degree:
-            job_to_return = job
-            break
-
-    return job_to_return
 
 
 def check_machine_availability(jobs_to_be_done, job):
@@ -567,78 +529,6 @@ def get_depth(job_list):
     return depth
 
 
-def get_parallelization_1(jobs):
-    # returns an array of arrays that indicate the jobs that can be executed in parallel
-    # jobs in the same inner array need the same machine to be done, so they cannot be
-    # parallelized. Only jobs in different inner arrays can be run consequently
-
-    parallel_jobs = []
-    temp = []
-    n = len(jobs)
-
-    job_index_1 = 0
-    while job_index_1 < n:
-        job_1 = jobs[job_index_1]
-        machine = job_1.get_machine_required()
-        if job_1 not in temp:
-            temp.append(job_1)
-            jobs.remove(job_1)
-            n -= 1
-
-            job_2_index = 0
-            while job_2_index < n:
-                if jobs[job_2_index].get_machine_required() == machine:
-                    temp.append(jobs[job_2_index])
-                    jobs.remove(jobs[job_2_index])
-                    n -= 1
-                else:
-                    job_2_index += 1
-            parallel_jobs.append(temp.copy())
-            temp.clear()
-        else:
-            job_index_1 += 1
-
-    return parallel_jobs
-
-
-def get_next_jobs(jobs_list):
-    next_jobs = []
-
-    for job in jobs_list:
-        if (job.get_completed() >= 1 and job.get_job_after()
-                and job.get_machine_required().count < job.get_machine_required().capacity):
-            next_jobs.append(job.get_job_after())
-
-    return next_jobs
-
-
-def get_jobs_in_parallel(bands, previously_done_jobs, jobs_list):
-    # returns jobs that can be run in parallel
-    # TODO: define bands
-    parallel_jobs = []
-
-    if bands == 1:
-        parallel_jobs.append(get_job_with_minimal_duration(jobs_list))
-        return parallel_jobs  # here only one job will be in jobs
-    else:
-        parallel_jobs.extend(get_next_jobs(previously_done_jobs))
-        parallel_jobs.append(get_job_with_minimal_degree(jobs_list))
-        return parallel_jobs
-
-
-def submit_orders(order):
-    # receives orders and sets the universal variables OBERTEIL_ORDER,
-    # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
-    global OBERTEIL_ORDER
-    OBERTEIL_ORDER = order
-    global UNTERTEIL_ORDER
-    UNTERTEIL_ORDER = order
-    global HALTETEIL_ORDER
-    HALTETEIL_ORDER = order
-    global RING_ORDER
-    RING_ORDER = order
-
-
 def get_parts_needed(order):
     # receives orders and sets the universal variables OBERTEIL_ORDER,
     # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
@@ -749,10 +639,7 @@ class Lernfabrik:
         self.process = None
         self.env = sim_env  # environment variable
         self.currently_broken = False  # boolean for denoting when a machine is broken
-        self.previously_created = ""  # string to denote the previously created part
-        self.next_creating = ""  # string to denote the next created part
         self.previous_drehen_job = None
-        self.done_once = False  # if true means the machine GZ200 in Ring creation has already been operated once
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
 
@@ -1252,7 +1139,6 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-#orders = [order_4]
 env.process(fabric.fulfill_orders(orders))
 env.run(until=2*SIM_TIME)
 
