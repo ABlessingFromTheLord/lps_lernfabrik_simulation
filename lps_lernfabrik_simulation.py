@@ -646,9 +646,14 @@ class Lernfabrik:
         # checks the time and day in which we are
 
         if self.env.now >= self.shift_track:
-            print(f"\n SCHÖNES FEIERABEND! time {self.env.now}\n")
-            self.shift_track += 28800
-            yield self.env.timeout(57600)  # 8-hour shift over, so 16 hours of no work till next day
+            overtime = (self.env.now - self.shift_track)
+            off_work = (16 * 3600)  # 16 hours of no work, example, 16pm today till 8am tomorrow
+
+            print(f"\n SCHÖNES FEIERABEND! time {self.env.now} of day {self.day}\n")
+            print(f"overtime: {overtime}, self shift track: {self.shift_track}")
+
+            self.shift_track += (28800 - overtime + off_work)
+            yield self.env.timeout(off_work + overtime)  # gone home
             self.day += 1
         else:
             yield self.env.timeout(0)
@@ -966,11 +971,11 @@ class Lernfabrik:
 
             self.done_jobs.clear()
 
-            print(f"Order fulfilled completely at {self.env.now}, which is day {self.day} \n\n")
+            print(f"Order fulfilled completely at {self.env.now}, in day {self.day} \n\n")
         else:
             self.done_jobs.clear()
 
-            print(f"Order unfulfilled at {self.env.now} which is day {self.day} \n\n")
+            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n\n")
 
     def fulfill_order_with_opt(self, order_number, order):
         # received and order and fulfills it
