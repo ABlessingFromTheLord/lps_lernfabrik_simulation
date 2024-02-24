@@ -444,6 +444,28 @@ def get_next_job_with_minimal_runtime(job, job_list):
     return next_job
 
 
+def sort_drehjobs_by_minimal_runtime_naive(job_list):
+    # naive implementation
+    if len(job_list) <= 1:
+        return job_list
+
+    min_run = []
+    job_with_minimal_degree = get_job_with_minimal_degree(job_list)
+    min_run.append(job_with_minimal_degree)
+    job_list.remove(job_with_minimal_degree)
+
+    job_index = 0
+    n = len(job_list)
+
+    while job_index < n:
+        job_with_min_runtime = get_next_job_with_minimal_runtime(min_run[-1], job_list)
+        min_run.append(job_with_min_runtime)
+        job_list.remove(job_with_min_runtime)
+        job_index += 1
+
+    return min_run
+
+
 def sort_drehjobs_by_minimal_runtime(previous_drehen, job_list):
     # return the job execution sequence of the Drehjobs with minimal Ruestungszeit
     if len(job_list) <= 1:
@@ -958,7 +980,10 @@ class Lernfabrik:
             # ordering the drehjobs in the order of minimal Ruestungszeit
             # we do not care about other jobs since they have constant Ruestungszeit
             drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            drehen_jobs = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, drehen_jobs)
+            copy_1 = drehen_jobs[:]
+            copy_2 = drehen_jobs[:]
+            drehen_jobs_naive = sort_drehjobs_by_minimal_runtime_naive(copy_1)
+            drehen_jobs_complex = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, copy_2)
 
             print("\nDrehjobs with minimal runtime:")
             for job in drehen_jobs:
@@ -972,7 +997,7 @@ class Lernfabrik:
 
             jobs_to_run = []
             jobs_to_run.extend(saegen_jobs)
-            jobs_to_run.extend(drehen_jobs)
+            jobs_to_run.extend(drehen_jobs_complex)
             jobs_to_run.extend(fraesen_jobs)
             jobs_to_run.extend(senken_jobs)
 
