@@ -658,6 +658,7 @@ class Lernfabrik:
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.stop_simulation = False
 
     # operation
     def operation(self, machine, operating_time, job_name):
@@ -693,7 +694,7 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while True:
+        while not self.stop_simulation:
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
             yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
@@ -980,9 +981,9 @@ class Lernfabrik:
             # ordering the drehjobs in the order of minimal Ruestungszeit
             # we do not care about other jobs since they have constant Ruestungszeit
             drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            copy_1 = drehen_jobs[:]
+            # copy_1 = drehen_jobs[:]
             copy_2 = drehen_jobs[:]
-            drehen_jobs_naive = sort_drehjobs_by_minimal_runtime_naive(copy_1)
+            # drehen_jobs_naive = sort_drehjobs_by_minimal_runtime_naive(copy_1)
             drehen_jobs_complex = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, copy_2)
 
             print("\nDrehjobs with minimal runtime:")
@@ -1109,6 +1110,7 @@ class Lernfabrik:
 
         self.duration = self.env.now - self.start_time
         print("Fulfilling orders took ", self.duration, " units of time")
+        self.stop_simulation = True
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
@@ -1206,7 +1208,7 @@ order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 env.process(fabric.fulfill_orders(orders))
-env.run(until=2*SIM_TIME)
+env.run()
 
 # analysis and results
 print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
