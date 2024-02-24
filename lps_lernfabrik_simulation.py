@@ -636,6 +636,7 @@ class Lernfabrik:
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.stop_simulation = False
 
     # operation
     def operation(self, machine, operating_time, job_name):
@@ -671,7 +672,7 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while True:
+        while not self.stop_simulation:
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
             yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
 
@@ -705,8 +706,6 @@ class Lernfabrik:
             print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
                   " to ", job.get_name(), " is ", equipping_time)
             print("\n")
-
-
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
@@ -1087,6 +1086,7 @@ class Lernfabrik:
 
         self.duration = self.env.now - self.start_time
         print("Fulfilling orders took ", self.duration, " units of time")
+        self.stop_simulation = True
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
