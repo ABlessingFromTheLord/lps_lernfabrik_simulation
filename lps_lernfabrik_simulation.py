@@ -687,7 +687,15 @@ class Lernfabrik:
 
     def do_job(self, job):
         # performs a certain job as subprocess in part creation process
-        # input amount is passed to diminish it based on machine's Qualitätsgrad after this job is done
+        # simulating transport time between machines
+        if job.get_machine_required() == machine_jaespa:
+            yield self.env.timeout(60)  # 60 seconds are needed to get to the saw from the lager
+        elif job.get_machine_required() == machine_gz200:
+            yield self.env.timeout(20)  # 20 seconds are needed from the saw to the Lathe machine
+        elif job.get_machine_required() == machine_fz12:
+            yield self.env.timeout(50)  # 50 seconds are needed to the milling machine
+
+        # getting values for use
         required_machine = job.get_machine_required()
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
@@ -697,6 +705,8 @@ class Lernfabrik:
             print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
                   " to ", job.get_name(), " is ", equipping_time)
             print("\n")
+
+
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
@@ -715,6 +725,15 @@ class Lernfabrik:
             yield self.process
 
             self.process = None
+
+        # simulating transport time between the machine and the finishing area
+        if job.get_part_name() == machine_fz12:
+            # 50 seconds are needed between the mill and the Arbeitsplatz 2
+            yield self.env.timeout(50)
+        else:
+            # all other parts need the GZ200 as end machine hence can be grouped in else
+            # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
+            yield self.env.timeout(70)
 
     def series_job_execution(self, jobs_in_series):
         # called n times to execute the rest of the jobs that cannot be parallelized
@@ -1042,6 +1061,9 @@ class Lernfabrik:
                 # increase Unilokk count for the one that is created
                 global UNILOKK_COUNT
                 UNILOKK_COUNT = UNILOKK_COUNT + 1
+
+                # simulating transporting the unilokk to the warehouse, 20 seconds are needed
+                yield self.env.timeout(20)
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
