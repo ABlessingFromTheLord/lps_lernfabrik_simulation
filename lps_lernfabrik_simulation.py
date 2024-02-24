@@ -638,6 +638,8 @@ class Lernfabrik:
     def __init__(self, sim_env):
         self.process = None
         self.env = sim_env  # environment variable
+        self.start_time = None
+        self.duration = None
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
@@ -1040,9 +1042,15 @@ class Lernfabrik:
         self.orders.receive_order(orders_list)
         prioritized_list = self.orders.order_by_priority()
 
+        # store starting time
+        self.start_time = self.env.now
+
         for order_number in range(len(prioritized_list)):
             yield self.env.process(self.fulfill_with_parallelization(
                 order_number + 1, prioritized_list[order_number]))
+
+        self.duration = self.env.now - self.start_time
+        print("Fulfilling orders took ", self.duration, " units of time")
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
 
