@@ -498,7 +498,7 @@ def get_job_with_minimal_duration(job_list):
     return next_job
 
 
-def get_runnable_jobs(done_jobs, jobs_list):
+def get_runnable_jobs(jobs_list):
     # returns a lost of jobs that are eligible to be run
     to_return = []
 
@@ -698,7 +698,8 @@ class Lernfabrik:
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
-            print("Ruestungszeit from ", self.previous_drehen_job.get_name(), " to ", job.get_name(), " is ", equipping_time)
+            print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
+                  " to ", job.get_name(), " is ", equipping_time)
             print("\n")
 
         global RUESTUNGS_ZEIT
@@ -831,7 +832,7 @@ class Lernfabrik:
                         current_depth += 1
 
                     # if there is a job that is ready to run
-                    nj = get_runnable_jobs(self.done_jobs, jobs)
+                    nj = get_runnable_jobs(jobs)
                     if len(nj) > 0:
                         for job in nj:
                             if (job not in to_do and current_depth < depth
@@ -934,7 +935,7 @@ class Lernfabrik:
             # ordering the drehjobs in the order of minimal Ruestungszeit
             # we do not care about other jobs since they have constant Ruestungszeit
             drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            drehen_jobs = sort_drehjobs_by_minimal_runtime(drehen_jobs)
+            drehen_jobs = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, drehen_jobs)
 
             print("\nDrehjobs with minimal runtime:")
             for job in drehen_jobs:
