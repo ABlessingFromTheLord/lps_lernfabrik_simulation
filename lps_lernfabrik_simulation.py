@@ -12,7 +12,7 @@ from pymoo.core.problem import Problem
 # breaking probability
 BROKEN_ZEIT = 60
 REPAIR_ZEIT = 60
-MTTR = 2 * 60  # TODO: setting it to one minute causes terminated processes to be interrupted
+MTTR = 60
 
 # part names / working strings
 OBERTEIL = "Oberteil"
