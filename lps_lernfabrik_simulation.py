@@ -634,8 +634,8 @@ class Lernfabrik:
         yield self.env.process(self.fulfill_orders(order, execution_sequence_in_parts))
 
 
-p = 210
-q = 301
+p = 10
+q = 1000
 step = 20
 
 for i in range(p, q, step):
@@ -707,7 +707,7 @@ for i in range(p, q, step):
     Fertigstellung.set_job_after(None)
     Finishing_Jobs = [Fertigstellung]
 
-    SIM_TIME = 86400
+    SIM_TIME = 10 * 86400
     fabric = Lernfabrik(env)
     print("order submitted ", i)
     env.process(fabric.simulate(i))
