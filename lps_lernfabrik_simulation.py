@@ -683,8 +683,8 @@ class Lernfabrik:
             print(f"\n SCHÖNES FEIERABEND! time {self.env.now} of day {self.day}\n")
             print(f"overtime: {overtime}, self shift track: {self.shift_track}")
 
-            self.shift_track += (28800 - overtime + off_work)
-            yield self.env.timeout(off_work + overtime)  # gone home
+            self.shift_track += (28800 + off_work)
+            yield self.env.timeout(off_work - overtime)  # gone home
             self.day += 1
         else:
             yield self.env.timeout(0)
