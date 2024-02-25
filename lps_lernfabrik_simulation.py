@@ -665,6 +665,7 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.start_time = None
         self.duration = None
+        self.shift_number = 1
         self.shift_track = 28800  # to keep track of shifts, 8 hour intervals
         self.day = 1  # to keep track of day
         self.currently_broken = False  # boolean for denoting when a machine is broken
@@ -675,17 +676,25 @@ class Lernfabrik:
 
     def time_management(self):
         # checks the time and day in which we are
+        pause = 45 * 60
 
         if self.env.now >= self.shift_track:
             overtime = (self.env.now - self.shift_track)
-            off_work = (16 * 3600)  # 16 hours of no work, example, 16pm today till 8am tomorrow
+            off_work = (8 * 3600)  # 8 hours of no work, example, 10pm today till 6am the next day
 
-            print(f"\n SCHÖNES FEIERABEND! time {self.env.now} of day {self.day}\n")
-            print(f"overtime: {overtime}, self shift track: {self.shift_track}")
+            if self.shift_number == 1:
+                print("Taking a pause")
+                yield self.env.timeout(pause)
+                print("Pause is over, shift 2 workers are starting work")
+                self.shift_number = 2
+            else:
+                print(f"\n SCHÖNES FEIERABEND! time {self.env.now} of day {self.day}\n")
+                print(f"overtime: {overtime}, self shift track: {self.shift_track}")
 
-            self.shift_track += (28800 + off_work)
-            yield self.env.timeout(off_work - overtime)  # gone home
-            self.day += 1
+                self.shift_track += (28800 + off_work)
+                yield self.env.timeout(off_work - overtime + pause)  # gone home
+                self.shift_number = 1
+                self.day += 1
         else:
             yield self.env.timeout(0)
 
