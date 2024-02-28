@@ -546,6 +546,15 @@ def get_runnable_jobs(jobs_list):
     return to_return
 
 
+def machine_is_free(machine):
+    # determines if a machine is free or not
+    if machine.count < machine.capacity:
+        return True
+
+    else:
+        return False
+
+
 def get_depth(job_list):
     # depth is defined as the amount of machines that can be run at the same time
     # in contrast to degree which is the stage of a job in the sequence of execution
@@ -559,6 +568,21 @@ def get_depth(job_list):
             depth += 1
 
     return depth
+
+
+def sort_like_drehen(drehen_jobs, other_jobs):
+    # arranges a list of jobs in the same order as the minimum Ruestungszeit determined by
+    # drehen jobs
+    other_jobs_copy = other_jobs[:]
+    to_return = []
+
+    for i in range(len(drehen_jobs)):
+        for other_job in other_jobs_copy:
+            if drehen_jobs[i].get_part_name() == other_job.get_part_name():
+                to_return.append(other_job)
+                other_jobs_copy.remove(other_job)
+
+    return to_return
 
 
 def get_parts_needed(order):
@@ -575,86 +599,6 @@ def get_parts_needed(order):
     RING_ORDER = order
 
     return [OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]
-
-
-def clear_stats():
-    global OBERTEIL_COUNT
-    OBERTEIL_COUNT = 0
-    global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT = 0
-    global HALTETEIL_COUNT
-    HALTETEIL_COUNT = 0
-    global RING_COUNT
-    RING_COUNT = 0
-
-    global UNILOKK_COUNT
-    UNILOKK_COUNT = 0
-    global RUESTUNGS_ZEIT
-    RUESTUNGS_ZEIT = 0
-
-
-def adjust(genes):
-    # if the machine capacity greater than order, genes are always zero
-    # this method adjusts that to make sure if that's the case, then the
-    # machine is run at least once
-    # other use case of the method is to round up
-    copy = []
-    for k in range(len(genes)):
-        if 0 < genes[k] < 1:
-            genes[k] = 1
-            copy.append(int(genes[k]))
-        else:
-            genes[k] = math.ceil(genes[k])
-            copy.append(int(genes[k]))
-    return copy
-
-
-def fill_with_zeroes(array, n):
-    # returns an array appended with zeroes to the length n
-    # useful so all arrays have same dimension later in optimization algorithm
-    while len(array) < n:
-        array.append(0)
-    return array
-
-
-# optimization problem definition
-class ExecutionAmounts(Problem):
-    def __init__(self):
-        super().__init__(n_var=4, n_obj=1, n_constr=0, xl=numpy.array([0, 0, 0, 0]),
-                         xu=numpy.array([OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]))
-
-    def _evaluate(self, x, out, *args, **kwargs):
-        total_oberteil = numpy.zeros(len(x))
-        total_unterteil = numpy.zeros(len(x))
-        total_halteteil = numpy.zeros(len(x))
-        total_ring = numpy.zeros(len(x))
-
-        for m in range(len(x)):
-            if OBERTEIL_COUNT == 0 and x[m, 0] == 0:
-                total_oberteil[m] = 1
-            elif x[m, 0] > 0:
-                total_oberteil[m] = OBERTEIL_PRODUCTION * x[m, 0]
-
-            if UNTERTEIL_COUNT == 0 and x[m, 1] == 0:
-                total_oberteil[m] = 1
-            elif x[m, 1] > 0:
-                total_unterteil[m] = UNTERTEIL_PRODUCTION * x[m, 1]
-
-            if HALTETEIL_COUNT == 0 and x[m, 2] == 0:
-                total_halteteil[m] = 1
-            elif x[m, 2] > 0:
-                total_halteteil[m] = HALTETEIL_PRODUCTION * x[m, 2]
-
-            if RING_COUNT == 0 and x[m, 3] == 0:
-                total_ring[m] = 1
-            elif x[m, 3] > 0:
-                total_ring[m] = RING_PRODUCTION * x[m, 3]
-
-        fitness = (numpy.abs(total_oberteil - OBERTEIL_ORDER) + numpy.abs(total_unterteil - UNTERTEIL_ORDER) +
-                   numpy.abs(total_halteteil - HALTETEIL_ORDER) + numpy.abs(total_ring - RING_ORDER))
-
-        out["F"] = fitness[:, None]  # Reshape to match the expected shape
-        out["G"] = numpy.zeros((len(x), 0))  # No constraints for now
 
 
 # simulation class
