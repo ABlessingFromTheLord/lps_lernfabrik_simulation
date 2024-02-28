@@ -631,30 +631,54 @@ class Lernfabrik:
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
         self.stop_simulation = False
+        env.process(self.clock())
 
-    def time_management(self):
-        # checks the time and day in which we are
-        pause = 45 * 60
+    def clock(self):
+        current_time = 0
 
-        if self.env.now >= self.shift_track:
-            overtime = (self.env.now - self.shift_track)
-            off_work = (8 * 3600)  # 8 hours of no work, example, 10pm today till 6am the next day
+        while not self.stop_simulation:
+            match current_time:
+                case 7200:
+                    # time for first break of first shift
+                    print(f"\n xxxxxxxxTime for first break of Frühschicht, Time is 0800Uhr \n")
+                    yield self.env.timeout(15)
+                    current_time += 15
 
-            if self.shift_number == 1:
-                print("Taking a pause")
-                yield self.env.timeout(pause)
-                print("Pause is over, shift 2 workers are starting work")
-                self.shift_number = 2
-            else:
-                print(f"\n SCHÖNES FEIERABEND! time {self.env.now} of day {self.day}\n")
-                print(f"overtime: {overtime}, self shift track: {self.shift_track}")
+                case 18000:
+                    # time for second break of first shift
+                    print(f"\n xxxxxxxTime for second break of Frühschicht, Time is 1130Uhr of day {self.day} \n")
+                    yield self.env.timeout(30)
+                    current_time += 30
 
-                self.shift_track += (28800 + off_work)
-                yield self.env.timeout(off_work - overtime + pause)  # gone home
-                self.shift_number = 1
-                self.day += 1
-        else:
-            yield self.env.timeout(0)
+                case 28800:
+                    # end of first shift
+                    print(f"\n xxxxxxSCHÖNES FEIERABEND to Frühschicht!, Time is 1400Uhr of day {self.day}\n")
+                    current_time += 1
+                    self.shift_number = 2
+
+                case 36000:
+                    # time for first break of first shift
+                    print(f"\n xxxxxxTime for first break of Spätschicht, Time is 1600uhr of day {self.day} \n")
+                    yield self.env.timeout(15)
+                    current_time += 15
+
+                case 18000:
+                    # time for second break of first shift
+                    print(f"\n xxxxxxxTime for second break of Spätschicht, Time is 1930Uhr of day {self.day} \n")
+                    yield self.env.timeout(30)
+                    current_time += 30
+
+                case 57600:
+                    # end of day
+                    print(f"\n xxxxxxxSCHÖNES FEIERABEND to Spätschicht!, Time is 2200Uhr of day {self.day}\n")
+                    yield self.env.timeout(28800)
+                    self.day += 1
+                    self.shift_number = 1
+                    current_time = 0
+
+                case _:
+                    current_time += 1
+                    yield self.env.timeout(1)
 
     # operation
     def operation(self, machine, operating_time, job_name):
@@ -723,7 +747,7 @@ class Lernfabrik:
             print("\n", job.get_name(), " is about to produce ", amount_to_produce, "\n")
 
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
-        operating_time = job.get_duration()
+        operating_time = job.get_duration() * amount_to_produce
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
@@ -769,8 +793,6 @@ class Lernfabrik:
             # all other parts need the GZ200 as end machine hence can be grouped in else
             # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
             yield self.env.timeout(70)
-
-        yield self.env.process(self.time_management())
 
     def series_job_execution(self, jobs_in_series):
         # called n times to execute the rest of the jobs that cannot be parallelized
