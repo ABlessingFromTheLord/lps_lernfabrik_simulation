@@ -6,7 +6,6 @@ from decimal import Decimal
 from Job import Job
 from Order import Order
 from OrderList import OrderList
-from pymoo.core.problem import Problem
 
 # global variables
 # breaking probability
@@ -45,6 +44,9 @@ DEADLINES_MET = 0
 
 # ruestungszeit
 RUESTUNGS_ZEIT = 0
+
+# unilokk just produced
+UNILOKK_PRODUCED = 0
 
 # unilokk created
 UNILOKK_COUNT = 0
@@ -110,12 +112,25 @@ def get_mz(machine):
         return 1
 
 
-def get_cumulative_quality_grade(part_name):
-    # ran after completion of the part creation process
-    # returns cumulative quality grade of the machines used
+def get_quality_grade(machine):
+    # returns the rate of error for a certain machine
     # i.e if quality grade is 98%, it means 98% of material produced are usable to the next stage
-    # 2% are thrown away, to rectify this, we produce 102% of the order, hence multiply output
-    # by cumulative quality grade
+    # 2% are thrown away
+    if machine == machine_jaespa:
+        return 1
+    elif machine == machine_gz200:
+        return 0.98
+    elif machine == machine_fz12:
+        return 0.95
+    elif machine == machine_arbeitsplatz_at_gz200:
+        return 0.96
+    elif machine == machine_arbeitsplatz_2:
+        return 0.9 * 0.98 * 0.98 * 0.98
+
+
+def get_cumulative_quality_grade(part_name):
+    # ran at the beginning of the part creation process
+    # returns cumulative quality grade of the machines used
     match part_name:
         case "Oberteil":
             return 1 * 0.98 * 0.98 * 0.95
@@ -124,12 +139,13 @@ def get_cumulative_quality_grade(part_name):
         case "Halteteil":
             return 1 * 0.98 * 0.98
         case "Ring":
-            return 1 * 0.98 * 1
+            return 1 * 0.98 * 0.96
 
 
 def get_human_error_by_part(loss_ratio, part_name):
     # a combined (1- 0.84) * amount is the human error
     # since different parts come in different quantities, use ratio to this amount
+    loss_ratio = Decimal(loss_ratio)  # convert to decimal for ease of use
 
     match part_name:
         case "Oberteil":
@@ -153,6 +169,33 @@ def get_output_per_part(part_name):
             return 49
         case "Ring":
             return 97
+
+
+def get_amount_to_produce(job):
+    # returns the amount needed to be produced by job
+    # we have to offset machine caused error and human caused error by calculating
+    # the offset need, for example, if mz is 98% then it is known that 2% are damaged,
+    # hence produced are 102% to offset the damage caused
+    part_name = job.get_part_name()
+
+    amount_produced = get_output_per_part(part_name)
+
+    # defected parts due to machine error
+    machine_caused_defects = 1 - Decimal(get_cumulative_quality_grade(part_name))
+
+    # defected parts due to human error, i.e, in the Kleben, Montage, Pruefen and Verpacken processes
+    machine_loss = math.ceil(amount_produced * machine_caused_defects)
+
+    # offset loss due to machine errors
+    amount_produced += machine_loss
+
+    human_caused_defects = Decimal(get_human_error_by_part(
+        math.floor(get_quality_grade(machine_arbeitsplatz_2)), part_name))
+    human_loss = math.ceil(amount_produced * human_caused_defects)
+
+    # offset loss due to human errors
+    amount_produced += human_loss
+    return amount_produced
 
 
 def all_jobs_completed_for_part(part_name):
@@ -665,8 +708,19 @@ class Lernfabrik:
     def do_job(self, job):
         # performs a certain job as subprocess in part creation process
         # getting values for use
+        part_name = job.get_part_name()
         required_machine = job.get_machine_required()
         transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
+
+        # getting amount to be produced by job
+        if job.get_degree() == 0:
+            # this is the initial job in part production process
+            amount_to_produce = get_amount_to_produce(job)
+            print("\n", job.get_name(), " is about to produce ", amount_to_produce, "\n")
+        else:
+            # at least one job has been done so that amount can be propagated that amount to this job
+            amount_to_produce = job.get_job_before().get_amount_produced()
+            print("\n", job.get_name(), " is about to produce ", amount_to_produce, "\n")
 
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
@@ -684,6 +738,7 @@ class Lernfabrik:
 
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
+
             print("transport time for ", job.get_name(), "is", transport_time)
             yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
@@ -697,6 +752,14 @@ class Lernfabrik:
             self.process = None
 
         job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
+        amount_produced = math.floor(amount_to_produce * get_quality_grade(required_machine))
+        job.set_amount_produced(amount_produced)
+        print("\n", job.get_name(), "produced ", amount_produced)
+
+        if all_jobs_completed_for_part(part_name):
+            #  all machines required to produce a part have been operated part is created
+            increase_part_count(part_name, amount_to_produce)  # add newly created part
+            print(math.floor(amount_to_produce), part_name, "(s) was created at ", self.env.now, "\n")
 
         # simulating transport time between the machine and the finishing area
         if job.get_part_name() == machine_fz12:
@@ -713,33 +776,8 @@ class Lernfabrik:
         # called n times to execute the rest of the jobs that cannot be parallelized
         # its execution is in series
         for job in jobs_in_series:
-            part_name = job.get_part_name()
-            amount_produced = get_output_per_part(part_name)
-
             yield self.env.process(self.do_job(job))
-
             self.done_jobs.append(job)
-
-            if all_jobs_completed_for_part(part_name):
-                #  all machines required to produce a part have been operated part is created
-                # defected parts due to machine error
-                machine_caused_defects = 1 - Decimal(get_cumulative_quality_grade(part_name))
-
-                # defected parts due to human error, i.e, in the Kleben, Montage, Pruefen and Verpacken processes
-                machine_loss = math.ceil(amount_produced * machine_caused_defects)
-
-                # offset loss due to machine errors
-                amount_produced += machine_loss
-
-                human_caused_defects = Decimal(get_human_error_by_part(machine_caused_defects, part_name))
-                human_loss = math.ceil(amount_produced * human_caused_defects)
-
-                # offset loss due to human errors
-                amount_produced += human_loss
-
-                increase_part_count(part_name, amount_produced)  # add newly created part
-
-                print(math.floor(amount_produced), part_name, "(s) was created at ", self.env.now, "\n")
 
     def parallel_job_execution(self, jobs_in_parallel):
         # called n times as our parallelized_jobs array to execute jobs in parallel
@@ -765,8 +803,8 @@ class Lernfabrik:
                 decrease_part_count(RING)
 
                 # increase Unilokk count for the one that is created
-                global UNILOKK_COUNT
-                UNILOKK_COUNT = UNILOKK_COUNT + 1
+                global UNILOKK_PRODUCED
+                UNILOKK_PRODUCED = UNILOKK_PRODUCED + 1
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
@@ -840,11 +878,17 @@ class Lernfabrik:
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
+
         yield self.env.process(self.finish_unilokk_creation())
 
-        # Kleben, Montage, Pruefen and Verpacken have a combined quality grade of 0.84
-        # hence we multiply our amount by this factor
-        UNILOKK_COUNT = math.floor(UNILOKK_COUNT * 0.84)
+        # increase based on what is produced minus damaged
+        global UNILOKK_PRODUCED
+        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
+
+        UNILOKK_COUNT += UNILOKK_PRODUCED
+
+        # reset the unilokk produced counter
+        UNILOKK_PRODUCED = 0
 
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)

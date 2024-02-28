@@ -9,6 +9,7 @@ class Job:
         self.machine_required = machine
         self.completed = 0
         self.degree = None
+        self.amount_produced = 0
 
     # getters
     def get_name(self):
@@ -35,6 +36,9 @@ class Job:
     def get_degree(self):
         return self.degree
 
+    def get_amount_produced(self):
+        return self.amount_produced
+
     # setters
     def set_job_before(self, job):
         self.job_before = job
@@ -48,4 +52,6 @@ class Job:
     def set_degree(self, value):
         self.degree = value
 
+    def set_amount_produced(self, value):
+        self.amount_produced = value
 
