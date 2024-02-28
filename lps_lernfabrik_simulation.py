@@ -430,6 +430,21 @@ def sort_drehjobs_by_minimal_runtime(previous_drehen, job_list):
     return min_run
 
 
+def sort_like_drehen(drehen_jobs, other_jobs):
+    # arranges a list of jobs in the same order as the minimum Ruestungszeit determined by
+    # drehen jobs
+    other_jobs_copy = other_jobs[:]
+    to_return = []
+
+    for i in range(len(drehen_jobs)):
+        for other_job in other_jobs_copy:
+            if drehen_jobs[i].get_part_name() == other_job.get_part_name():
+                to_return.append(other_job)
+                other_jobs_copy.remove(other_job)
+
+    return to_return
+
+
 def get_job_with_minimal_duration(job_list):
     # returns the next job with the shortest duration or runtime
     next_job = job_list[0]
@@ -462,6 +477,70 @@ def machine_is_free(machine):
         return False
 
 
+def sort_jobs_by_machines(jobs_list):
+    # returns a list of list with each inner list consisting of jobs that can be run by the same machine
+
+    iteration_index = 0
+    to_return = []
+
+    while len(jobs_list) > 0:
+        machine = jobs_list[iteration_index].get_machine_required()
+
+        jobs_by_machine = [x for x in jobs_list if x.get_machine_required() == machine]
+
+        for job in jobs_by_machine:
+            jobs_list.remove(job)
+
+        to_return.append(jobs_by_machine)
+
+    return to_return
+
+
+def arrange_jobs_by_min_setup_time(previous_drehen, job_list):
+    # receives jobs after they have been sorted into list of list based on machines needed
+    # to run respective job, returns all jobs in the list of list sorted by minimal runtime
+    # bottleneck are the drehen jobs, so their sequence with minimal setup time is first found
+    # then all other jobs are arranged in the same way
+
+    # get the drehen jobs
+    drehen_jobs = [x[0] for x in job_list if x[0].get_machine_required() == machine_gz200 for x[0] in x]
+
+    # get their sequence of execution such that minimal set up time is achieved
+    min_dreh_jobs_sequence = sort_drehjobs_by_minimal_runtime(previous_drehen, drehen_jobs)
+
+    print("\n min drehjobs sequence: ")
+    for job in min_dreh_jobs_sequence:
+        print(job.get_name())
+
+    print("\n")
+
+    # sort all other jobs in the corresponding sequence
+    for i in range(len(job_list)):
+        if job_list[i][0].get_machine_required() != machine_gz200:
+            job_list[i] = sort_like_drehen(min_dreh_jobs_sequence, job_list[i])
+        else:
+            # no need to sort like drehen since drehen min sequence is already determined
+            job_list[i] = min_dreh_jobs_sequence
+
+    return job_list
+
+
+def get_parallel_runnable_jobs(jobs_list):
+    # returns jobs that can be run in parallel as a list
+    # "ran in parallel means" at the same time
+    to_return = []
+
+    for jobs_sublist in jobs_list:
+        if len(jobs_sublist) > 0:
+            machine_needed = jobs_sublist[0].get_machine_required()
+
+            if machine_is_free(machine_needed) and is_runnable(jobs_sublist[0]):
+                to_return.append(jobs_sublist[0])
+                jobs_sublist.remove(jobs_sublist[0])
+
+    return to_return
+
+
 def get_depth(job_list):
     # depth is defined as the amount of machines that can be run at the same time
     # in contrast to degree which is the stage of a job in the sequence of execution
@@ -475,21 +554,6 @@ def get_depth(job_list):
             depth += 1
 
     return depth
-
-
-def sort_like_drehen(drehen_jobs, other_jobs):
-    # arranges a list of jobs in the same order as the minimum Ruestungszeit determined by
-    # drehen jobs
-    other_jobs_copy = other_jobs[:]
-    to_return = []
-
-    for i in range(len(drehen_jobs)):
-        for other_job in other_jobs_copy:
-            if drehen_jobs[i].get_part_name() == other_job.get_part_name():
-                to_return.append(other_job)
-                other_jobs_copy.remove(other_job)
-
-    return to_return
 
 
 def get_parts_needed(order):
@@ -563,12 +627,12 @@ class Lernfabrik:
 
                 self.process = None
                 operating_time = 0
-                print(f"finish time is {self.env.now} seconds")
+                print(f"finish time for {job_name} is {self.env.now} seconds\n")
 
             except simpy.Interrupt:
                 self.currently_broken = True
 
-                print(f"Machine{machine} got PREEMPTED at {self.env.now}")  # TODO: comment out after proving
+                print(f"\nMachine{machine} broke down at {self.env.now}")  # TODO: comment out after proving
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
                 # producing random repair time in the gaussian distribution with mean 60 seconds and standard
@@ -576,7 +640,8 @@ class Lernfabrik:
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
 
-                print(f"remaining time for operation {operating_time} seconds, continues at {self.env.now}")
+                print(f"Machine repaired, remaining time for operation {operating_time} seconds, "
+                      f"continues at {self.env.now}\n")
 
                 self.currently_broken = False
 
@@ -602,7 +667,6 @@ class Lernfabrik:
         # getting values for use
         required_machine = job.get_machine_required()
         transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
-        yield self.env.timeout(transport_time)
 
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
@@ -620,6 +684,8 @@ class Lernfabrik:
 
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
+            print("transport time for ", job.get_name(), "is", transport_time)
+            yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
 
             self.process = self.env.process(self.operation(
@@ -629,6 +695,8 @@ class Lernfabrik:
             yield self.process
 
             self.process = None
+
+        job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
 
         # simulating transport time between the machine and the finishing area
         if job.get_part_name() == machine_fz12:
@@ -650,7 +718,6 @@ class Lernfabrik:
 
             yield self.env.process(self.do_job(job))
 
-            job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
             self.done_jobs.append(job)
 
             if all_jobs_completed_for_part(part_name):
@@ -750,79 +817,26 @@ class Lernfabrik:
 
             amount_of_jobs_to_be_done = len(jobs)
 
-            # getting the minimal order for the Drehjobs
-            drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            saegen_jobs = [x for x in jobs if x.get_machine_required() == machine_jaespa]
-            drehen_jobs = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, drehen_jobs)
-            saegen_jobs = sort_like_drehen(drehen_jobs, saegen_jobs)
-            fraesen_jobs = [x for x in jobs if x.get_machine_required() == machine_fz12]
-            senken_jobs = [x for x in jobs if x.get_machine_required() == machine_arbeitsplatz_at_gz200]
+            # sorting jobs based on what machine is needed to run them
+            jobs_sorted_by_machines = sort_jobs_by_machines(jobs)
 
-            drehen_sequence = []
-            for job in drehen_jobs:
-                drehen_sequence.append(job.get_part_name())
-
-            print("\norder of Drehen jobs:")
-            for job in drehen_jobs:
-                print(job.get_name())
-            print("\n")
-
-            print("\norder of Saegen jobs:")
-            for job in saegen_jobs:
-                print(job.get_name())
-            print("\n")
-
-            depth = get_depth(jobs)
-            previously_done_jobs = []
-            iteration = 0
-            current_dreh_job = 0
+            # sort jobs based on the part production to achieve minimal set up time
+            min_setup_time_jobs_sequence = (
+                arrange_jobs_by_min_setup_time(self.previous_drehen_job, jobs_sorted_by_machines))
 
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
-                # we are only starting out
-                if iteration == 0:
-                    first_job = saegen_jobs[0]
-                    yield self.env.process(self.series_job_execution([first_job]))
-                    previously_done_jobs.append(first_job)
-                    saegen_jobs.remove(first_job)
-                    iteration += 1
-                    current_dreh_job += 1
+                to_do = []
+
+                # get jobs that can be run in parallel
+                to_do.extend(get_parallel_runnable_jobs(min_setup_time_jobs_sequence))
+
+                if len(to_do) > 0:
+                    # do the jobs in parallel
+                    yield self.env.process(self.parallel_job_execution(to_do))
 
                 else:
-                    current_depth = 0
-                    to_do = []
-
-                    # check if the machine Jaespa is free, if yes run the next saegen job
-                    if machine_is_free(machine_jaespa) and len(saegen_jobs) > 0 and is_runnable(saegen_jobs[0]):
-                        to_do.append(saegen_jobs[0])
-                        saegen_jobs.remove(saegen_jobs[0])
-
-                    # check if the machine GZ200 is free, if yes run the next drehen job
-                    if machine_is_free(machine_gz200) and len(drehen_jobs) > 0 and is_runnable(drehen_jobs[0]):
-                        to_do.append(drehen_jobs[0])
-                        drehen_jobs.remove(drehen_jobs[0])
-
-                    # check if the machine FZ12 of machines are free, if yes run the fraesen job
-                    if machine_is_free(machine_fz12) and len(fraesen_jobs) > 0 and is_runnable(fraesen_jobs[0]):
-                        to_do.append(fraesen_jobs[0])
-                        fraesen_jobs.remove(fraesen_jobs[0])
-
-                    # check if the machine Arbeitsplatz at GZ200 ois free, if yes run the senken job
-                    if machine_is_free(machine_arbeitsplatz_2) and len(senken_jobs) > 0 and is_runnable(senken_jobs[0]):
-                        to_do.append(senken_jobs[0])
-                        senken_jobs.remove(senken_jobs[0])
-
-                    # out of while loop
-                    # do the jobs in parallel
-                    if len(to_do) > 0:
-                        yield self.env.process(self.parallel_job_execution(to_do))
-
-                        previously_done_jobs.clear()
-                        previously_done_jobs.extend(to_do)
-                        iteration += 1
-
-                    else:
-                        yield self.env.timeout(1)
-                        iteration += 1
+                    # no jobs were found, move simulation forward
+                    yield self.env.timeout(1)
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
