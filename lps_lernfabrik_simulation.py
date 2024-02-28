@@ -295,96 +295,6 @@ def get_parts_by_sequence(sequence):
     return to_return
 
 
-def get_job_with_minimal_degree(job_list):
-    # returns the job with the minimal degree, ie, the job that should be executed first
-    job_with_minimal_degree = None
-
-    for i in range(len(job_list)):
-        if i == 0:
-            job_with_minimal_degree = job_list[i]
-        else:
-            if job_list[i].get_degree() < job_with_minimal_degree.get_degree():
-                job_with_minimal_degree = job_list[i]
-
-    return job_with_minimal_degree
-
-
-def get_job_with_minimal_degree_by_part(part_name, done_jobs, jobs_to_be_done, drehen_sequence, job_list):
-    # returns the job with the minimal degree, ie, the job that should be executed first
-    # this should also take into account that the machine needed to run this job is free
-    jobs_copy = [x for x in job_list if x.get_part_name() == part_name]
-    job_with_minimal_degree = None
-
-    # machine for part is already added, no need to look for another job
-    for job in jobs_to_be_done:
-        if job.get_part_name() == part_name:
-            return None
-
-    # just starting, no done jobs. getting jobs before can be disregarded
-    if len(done_jobs) == 0:
-        job_with_minimal_degree = jobs_copy[0]
-
-        for job in jobs_copy:
-            if job.get_degree() < job_with_minimal_degree.get_degree():
-                job_with_minimal_degree = job
-        return job_with_minimal_degree
-
-    # some jobs have already been done, but there is no corresponding job for part
-    if len(jobs_copy) == 0:
-        index_for_old_part = drehen_sequence.index(part_name)
-
-        if index_for_old_part + 1 >= len(drehen_sequence):
-            return None
-
-        new_part = drehen_sequence[index_for_old_part + 1]
-
-        if new_part == part_name:
-            return None
-
-        new_jobs = [x for x in job_list if x.get_part_name() == new_part]
-        return get_job_with_minimal_degree(new_jobs)
-
-    # some jobs have been done and there is one for part
-    if jobs_copy[0].get_job_before() is not None:
-        if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity \
-                and jobs_copy[0].get_job_before().get_completed() >= 1:
-            job_with_minimal_degree = jobs_copy[0]
-    else:
-        if jobs_copy[0].get_machine_required().count < jobs_copy[0].get_machine_required().capacity:
-            job_with_minimal_degree = jobs_copy[0]
-
-    # none was found since no proceeding job is in done jobs
-    if job_with_minimal_degree is None:
-        for job in jobs_copy:
-            if job.get_machine_required().count < job.get_machine_required().capacity:
-                job_with_minimal_degree = job
-                break
-
-    # Machines for all parts are busy
-    if job_with_minimal_degree is None:
-        return None
-
-    # at least one part has machines free and looking for job with minimal degree is possible
-    for i in range(1, len(jobs_copy)):
-        if (jobs_copy[i].get_degree() < job_with_minimal_degree.get_degree()
-            and jobs_copy[i].get_job_before() in done_jobs) \
-                and jobs_copy[i].get_machine_required().count < jobs_copy[i].get_machine_required().capacity:
-            job_with_minimal_degree = jobs_copy[i]
-
-    return job_with_minimal_degree
-
-
-def check_machine_availability(jobs_to_be_done, job):
-    # checks if the job to be done does not coincide with another job that needs the same machinery
-    # this is before execution
-
-    for i in jobs_to_be_done:
-        if i.get_machine_required() == job.get_machine_required():
-            return False
-
-    return True
-
-
 def get_equipping_time(job_1, job_2):
     # returns the equipping time of the job about to be executed
     # if the job is a Drehjob, ie, a job that needs machine gz200
@@ -531,19 +441,16 @@ def get_job_with_minimal_duration(job_list):
     return next_job
 
 
-def get_runnable_jobs(jobs_list):
-    # returns a lost of jobs that are eligible to be run
-    to_return = []
+def is_runnable(job):
+    # checks if a job is eligible to be run
 
-    for job in jobs_list:
-        if job.get_machine_required().count < job.get_machine_required().capacity:
-            if job.get_job_before() is None:
-                to_return.append(job)
-            else:
-                if job.get_job_before().get_completed() >= 1:
-                    to_return.append(job)
-
-    return to_return
+    if job.get_degree() == 0:
+        return True
+    else:
+        if job.get_job_before().get_completed() >= 1:
+            return True
+        else:
+            return False
 
 
 def machine_is_free(machine):
@@ -845,19 +752,23 @@ class Lernfabrik:
 
             # getting the minimal order for the Drehjobs
             drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-            other_jobs = [x for x in jobs if x.get_machine_required() != machine_gz200]
+            saegen_jobs = [x for x in jobs if x.get_machine_required() == machine_jaespa]
             drehen_jobs = sort_drehjobs_by_minimal_runtime(self.previous_drehen_job, drehen_jobs)
+            saegen_jobs = sort_like_drehen(drehen_jobs, saegen_jobs)
+            fraesen_jobs = [x for x in jobs if x.get_machine_required() == machine_fz12]
+            senken_jobs = [x for x in jobs if x.get_machine_required() == machine_arbeitsplatz_at_gz200]
 
             drehen_sequence = []
             for job in drehen_jobs:
                 drehen_sequence.append(job.get_part_name())
 
-            # add jobs in jobs array in the right order in which Drehen jobs are to be executed
-            jobs.clear()
-            jobs.extend(other_jobs)
-
             print("\norder of Drehen jobs:")
             for job in drehen_jobs:
+                print(job.get_name())
+            print("\n")
+
+            print("\norder of Saegen jobs:")
+            for job in saegen_jobs:
                 print(job.get_name())
             print("\n")
 
@@ -869,11 +780,10 @@ class Lernfabrik:
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
                 # we are only starting out
                 if iteration == 0:
-                    first_job = get_job_with_minimal_degree_by_part(
-                        drehen_jobs[current_dreh_job].get_part_name(), self.done_jobs, [], drehen_sequence, jobs)
+                    first_job = saegen_jobs[0]
                     yield self.env.process(self.series_job_execution([first_job]))
                     previously_done_jobs.append(first_job)
-                    jobs.remove(first_job)
+                    saegen_jobs.remove(first_job)
                     iteration += 1
                     current_dreh_job += 1
 
@@ -881,42 +791,25 @@ class Lernfabrik:
                     current_depth = 0
                     to_do = []
 
+                    # check if the machine Jaespa is free, if yes run the next saegen job
+                    if machine_is_free(machine_jaespa) and len(saegen_jobs) > 0 and is_runnable(saegen_jobs[0]):
+                        to_do.append(saegen_jobs[0])
+                        saegen_jobs.remove(saegen_jobs[0])
+
                     # check if the machine GZ200 is free, if yes run the next drehen job
-                    if machine_gz200.count < machine_gz200.capacity and len(drehen_jobs) > 0:
+                    if machine_is_free(machine_gz200) and len(drehen_jobs) > 0 and is_runnable(drehen_jobs[0]):
                         to_do.append(drehen_jobs[0])
                         drehen_jobs.remove(drehen_jobs[0])
-                        current_depth += 1
 
-                    # if there is a job that is ready to run
-                    nj = get_runnable_jobs(jobs)
-                    if len(nj) > 0:
-                        for job in nj:
-                            if (job not in to_do and current_depth < depth
-                                    and check_machine_availability(to_do, job)):
-                                to_do.append(job)
-                                jobs.remove(job)
-                                current_depth += 1
+                    # check if the machine FZ12 of machines are free, if yes run the fraesen job
+                    if machine_is_free(machine_fz12) and len(fraesen_jobs) > 0 and is_runnable(fraesen_jobs[0]):
+                        to_do.append(fraesen_jobs[0])
+                        fraesen_jobs.remove(fraesen_jobs[0])
 
-                    # find the next runnable job with minimal degree whose resource is free
-                    if iteration >= len(drehen_sequence):
-                        iteration = 1
-
-                    if len(drehen_sequence) == 1:
-                        iteration = 0
-
-                    next_job = None
-                    if len(drehen_jobs) > 0:
-                        last_drehen = drehen_jobs[0].get_part_name()
-                        index_drehen = drehen_sequence.index(last_drehen)
-
-                        next_job = get_job_with_minimal_degree_by_part(
-                            drehen_sequence[index_drehen], self.done_jobs, to_do, drehen_sequence, jobs)
-
-                    if next_job is not None and next_job not in to_do and current_depth < depth \
-                            and next_job.get_machine_required().count < next_job.get_machine_required().capacity:
-                        to_do.append(next_job)
-                        jobs.remove(next_job)
-                        current_depth += 1
+                    # check if the machine Arbeitsplatz at GZ200 ois free, if yes run the senken job
+                    if machine_is_free(machine_arbeitsplatz_2) and len(senken_jobs) > 0 and is_runnable(senken_jobs[0]):
+                        to_do.append(senken_jobs[0])
+                        senken_jobs.remove(senken_jobs[0])
 
                     # out of while loop
                     # do the jobs in parallel
