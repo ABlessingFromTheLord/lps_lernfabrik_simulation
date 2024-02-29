@@ -817,17 +817,18 @@ class Lernfabrik:
             # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
             yield self.env.timeout(70)
 
+        self.done_jobs.append(job)
+
     def series_job_execution(self, jobs_in_series):
         # called n times to execute the rest of the jobs that cannot be parallelized
         # its execution is in series
         for job in jobs_in_series:
             yield self.env.process(self.do_job(job))
-            self.done_jobs.append(job)
 
     def parallel_job_execution(self, jobs_in_parallel):
         # called n times as our parallelized_jobs array to execute jobs in parallel
         for job in jobs_in_parallel:
-            self.env.process(self.series_job_execution([job]))
+            self.env.process(self.do_job(job))
             yield self.env.timeout(0)
 
     def finish_unilokk_creation(self):
