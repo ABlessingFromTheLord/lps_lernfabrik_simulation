@@ -304,7 +304,7 @@ def amount_of_runs(order_list):
 def get_degree(job):
     # returns degree of a job
     # TODO: explain what a degree is
-    return job.get_degree()
+    return job.get_depth()
 
 
 def get_parts_by_sequence(sequence):
@@ -497,7 +497,7 @@ def get_job_with_minimal_duration(job_list):
 def is_runnable(job):
     # checks if a job is eligible to be run
 
-    if job.get_degree() == 0:
+    if job.get_depth() == 0:
         return True
     else:
         if job.get_job_before().get_completed() >= 1:
@@ -751,7 +751,7 @@ class Lernfabrik:
         transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
 
         # getting amount to be produced by job
-        if job.get_degree() == 0:
+        if job.get_depth() == 0:
             # this is the initial job in part production process
             amount_to_produce = get_amount_to_produce(job)
         else:
@@ -1121,13 +1121,13 @@ Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
 Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
-Oberteil_Saegen.set_degree(0)
+Oberteil_Saegen.set_depth(0)
 Oberteil_Drehen.set_job_before(Oberteil_Saegen)
 Oberteil_Drehen.set_job_after(Oberteil_Fraesen)
-Oberteil_Drehen.set_degree(1)
+Oberteil_Drehen.set_depth(1)
 Oberteil_Fraesen.set_job_before(Oberteil_Drehen)
 Oberteil_Fraesen.set_job_after(None)
-Oberteil_Fraesen.set_degree(2)
+Oberteil_Fraesen.set_depth(2)
 Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
@@ -1135,10 +1135,10 @@ Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
 Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
-Unterteil_Saegen.set_degree(0)
+Unterteil_Saegen.set_depth(0)
 Unterteil_Drehen.set_job_before(Unterteil_Saegen)
 Unterteil_Drehen.set_job_after(None)
-Unterteil_Drehen.set_degree(1)
+Unterteil_Drehen.set_depth(1)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
@@ -1146,10 +1146,10 @@ Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
 Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
-Halteteil_Saegen.set_degree(0)
+Halteteil_Saegen.set_depth(0)
 Halteteil_Drehen.set_job_before(Halteteil_Saegen)
 Halteteil_Drehen.set_job_after(None)
-Halteteil_Drehen.set_degree(1)
+Halteteil_Drehen.set_depth(1)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
@@ -1158,13 +1158,13 @@ Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
 Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200)
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
-Ring_Saegen.set_degree(0)
+Ring_Saegen.set_depth(0)
 Ring_Drehen.set_job_before(Ring_Saegen)
 Ring_Drehen.set_job_after(Ring_Senken)
-Ring_Drehen.set_degree(1)
+Ring_Drehen.set_depth(1)
 Ring_Senken.set_job_before(Ring_Drehen)
 Ring_Senken.set_job_after(None)
-Ring_Senken.set_degree(2)
+Ring_Senken.set_depth(2)
 Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken]
 
 # Finishing jobs

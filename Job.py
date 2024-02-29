@@ -8,7 +8,7 @@ class Job:
         self.job_after = Job
         self.machine_required = machine
         self.completed = 0
-        self.degree = None
+        self.depth = None
         self.amount_produced = 0
 
     # getters
@@ -33,8 +33,8 @@ class Job:
     def get_completed(self):
         return self.completed
 
-    def get_degree(self):
-        return self.degree
+    def get_depth(self):
+        return self.depth
 
     def get_amount_produced(self):
         return self.amount_produced
@@ -49,9 +49,8 @@ class Job:
     def set_completed(self, value):
         self.completed = value
 
-    def set_degree(self, value):
-        self.degree = value
+    def set_depth(self, value):
+        self.depth = value
 
     def set_amount_produced(self, value):
         self.amount_produced = value
-
