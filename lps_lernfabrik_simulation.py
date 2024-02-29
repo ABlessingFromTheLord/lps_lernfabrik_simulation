@@ -624,61 +624,78 @@ class Lernfabrik:
         self.start_time = None
         self.duration = None
         self.shift_number = 1
-        self.shift_track = 28800  # to keep track of shifts, 8 hour intervals
         self.day = 1  # to keep track of day
+        self.last_day = 0
+        self.taken_break_1 = False
+        self.start_of_break_1 = 7200
+        self.end_of_break_1 = 0  # is set at end of break
+        self.taken_break_2 = False
+        self.start_of_break_2 = 19800
+        self.end_of_break_2 = 19830 * self.day
+        self.start_of_shift_1 = 1
+        self.start_of_shift_2 = 50400
+        self.end_of_shift_1 = 50400
+        self.end_of_shift_2 = 79200 * self.day
+        self.overtime_allowed = 3600 * self.day
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
         self.stop_simulation = False
-        env.process(self.clock())
 
-    def clock(self):
-        current_time = 0
+    def time_management(self):
+        # checks the time and day in which we are
 
-        while not self.stop_simulation:
-            match current_time:
-                case 7200:
-                    # time for first break of first shift
-                    print(f"\n xxxxxxxxTime for first break of Frühschicht, Time is 0800Uhr \n")
-                    yield self.env.timeout(15)
-                    current_time += 15
+        if self.start_of_break_1 <= self.env.now < self.start_of_break_2 and not self.taken_break_1:
+            print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            yield self.env.timeout(15)
+            print(f"Break ends at {self.env.now}\n")
 
-                case 18000:
-                    # time for second break of first shift
-                    print(f"\n xxxxxxxTime for second break of Frühschicht, Time is 1130Uhr of day {self.day} \n")
-                    yield self.env.timeout(30)
-                    current_time += 30
+            self.taken_break_1 = True
+            self.start_of_break_2 = self.env.now + 10815
 
-                case 28800:
-                    # end of first shift
-                    print(f"\n xxxxxxSCHÖNES FEIERABEND to Frühschicht!, Time is 1400Uhr of day {self.day}\n")
-                    current_time += 1
-                    self.shift_number = 2
+        elif self.start_of_break_2 <= self.env.now < self.end_of_shift_1 and not self.taken_break_2:
+            print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            yield self.env.timeout(30)
+            print(f"Break ends at {self.env.now}\n")
 
-                case 36000:
-                    # time for first break of first shift
-                    print(f"\n xxxxxxTime for first break of Spätschicht, Time is 1600uhr of day {self.day} \n")
-                    yield self.env.timeout(15)
-                    current_time += 15
+            self.taken_break_2 = True
+            self.end_of_break_2 = self.env.now
 
-                case 18000:
-                    # time for second break of first shift
-                    print(f"\n xxxxxxxTime for second break of Spätschicht, Time is 1930Uhr of day {self.day} \n")
-                    yield self.env.timeout(30)
-                    current_time += 30
+        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_1 and self.shift_number == 1:
+            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}")
+            self.shift_number = 2
+            print(f"Second shift starts at {self.env.now}\n")
 
-                case 57600:
-                    # end of day
-                    print(f"\n xxxxxxxSCHÖNES FEIERABEND to Spätschicht!, Time is 2200Uhr of day {self.day}\n")
-                    yield self.env.timeout(28800)
-                    self.day += 1
-                    self.shift_number = 1
-                    current_time = 0
+            self.taken_break_1 = False
+            self.taken_break_2 = False
+            self.start_of_break_1 = self.env.now + 7200
+            self.start_of_break_2 = self.env.now + 19800
+            self.end_of_break_2 = self.env.now + 19830
+            self.end_of_shift_2 = self.env.now + 79200
 
-                case _:
-                    current_time += 1
-                    yield self.env.timeout(1)
+        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_2 and self.shift_number == 2:
+            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
+            yield self.env.timeout(28800)
+
+            # resetting variables for the next day
+            self.shift_number = 1
+            self.taken_break_1 = False
+            self.taken_break_2 = False
+            self.last_day = self.day
+            self.day += 1  # a new day starts
+            self.start_of_shift_1 = self.env.now
+            self.end_of_shift_1 = self.env.now + 50400
+            self.start_of_break_1 = self.env.now + 7200
+            self.end_of_break_1 = self.env.now + 7215
+            self.start_of_break_2 = self.env.now + 19800
+            self.end_of_break_2 = self.env.now + 19830
+            self.end_of_shift_2 = self.env.now + 79200
+            print(f"\nShift {self.shift_number} of day {self.day} starts at {self.start_of_shift_1}")
+
+        else:
+            # pass over and continue working since no event is relevant at this time
+            yield self.env.timeout(0)
 
     # operation
     def operation(self, machine, operating_time, job_name):
@@ -688,18 +705,16 @@ class Lernfabrik:
         while operating_time:
             start = self.env.now
             try:
-                print(f"execution time of {job_name} is {operating_time} seconds, started execution at {self.env.now}")
-
                 yield self.env.timeout(operating_time)  # running operation
 
                 self.process = None
                 operating_time = 0
-                print(f"finish time for {job_name} is {self.env.now} seconds\n")
+                yield self.env.process(self.time_management())
 
             except simpy.Interrupt:
                 self.currently_broken = True
 
-                print(f"\nMachine{machine} broke down at {self.env.now}")  # TODO: comment out after proving
+                print(f"\nMachine{machine} broke down at {self.env.now}")
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
                 # producing random repair time in the gaussian distribution with mean 60 seconds and standard
@@ -707,8 +722,8 @@ class Lernfabrik:
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
 
-                print(f"Machine repaired, remaining time for operation {operating_time} seconds, "
-                      f"continues at {self.env.now}\n")
+                print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
+                      f"seconds, continues at {self.env.now}\n")
 
                 self.currently_broken = False
 
@@ -740,14 +755,12 @@ class Lernfabrik:
         if job.get_degree() == 0:
             # this is the initial job in part production process
             amount_to_produce = get_amount_to_produce(job)
-            print("\n", job.get_name(), " is about to produce ", amount_to_produce, "\n")
         else:
             # at least one job has been done so that amount can be propagated that amount to this job
             amount_to_produce = job.get_job_before().get_amount_produced()
-            print("\n", job.get_name(), " is about to produce ", amount_to_produce, "\n")
 
         equipping_time = get_equipping_time(self.previous_drehen_job, job)
-        operating_time = job.get_duration() * amount_to_produce
+        operating_time = job.get_duration()
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
@@ -763,22 +776,28 @@ class Lernfabrik:
         with required_machine.request(priority=1, preempt=False) as request:
             yield request
 
-            print("transport time for ", job.get_name(), "is", transport_time)
+            print("\nTransport time for ", job.get_name(), "is", transport_time)
             yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
 
-            self.process = self.env.process(self.operation(
-                required_machine, operating_time, job.get_name()))  # operating machinery
-
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
-            yield self.process
 
-            self.process = None
+            print(f"{job.get_name()} of {amount_to_produce} parts will take {operating_time * amount_to_produce} "
+                  f"seconds, started execution at {self.env.now}")
+
+            for i in range(0, amount_to_produce):
+                self.process = self.env.process(self.operation(
+                    required_machine, operating_time, job.get_name()))  # operating machinery
+
+                yield self.process
+
+                self.process = None
+
+            print(f"Finishing time for {job.get_name()} is {self.env.now} seconds")
 
         job.set_completed(job.get_completed() + 1)  # incrementing times the job is done
         amount_produced = math.floor(amount_to_produce * get_quality_grade(required_machine))
         job.set_amount_produced(amount_produced)
-        print("\n", job.get_name(), "produced ", amount_produced)
 
         if all_jobs_completed_for_part(part_name):
             #  all machines required to produce a part have been operated part is created
