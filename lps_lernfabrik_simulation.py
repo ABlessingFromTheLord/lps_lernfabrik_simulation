@@ -647,6 +647,7 @@ class Lernfabrik:
         # checks the time and day in which we are
 
         if self.start_of_break_1 <= self.env.now < self.start_of_break_2 and not self.taken_break_1:
+            # taking first break of shift
             print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(15)
             print(f"Break ends at {self.env.now}\n")
@@ -655,6 +656,7 @@ class Lernfabrik:
             self.start_of_break_2 = self.env.now + 10815
 
         elif self.start_of_break_2 <= self.env.now < self.end_of_shift_1 and not self.taken_break_2:
+            # taking second break of shift
             print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(30)
             print(f"Break ends at {self.env.now}\n")
@@ -663,6 +665,7 @@ class Lernfabrik:
             self.end_of_break_2 = self.env.now
 
         elif self.end_of_break_2 <= self.env.now < self.end_of_shift_1 and self.shift_number == 1:
+            # ending shift 1
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}")
             self.shift_number = 2
             print(f"Second shift starts at {self.env.now}\n")
@@ -675,6 +678,7 @@ class Lernfabrik:
             self.end_of_shift_2 = self.env.now + 79200
 
         elif self.end_of_break_2 <= self.env.now < self.end_of_shift_2 and self.shift_number == 2:
+            # ending shift 2 and day
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
             yield self.env.timeout(28800)
 
@@ -698,7 +702,7 @@ class Lernfabrik:
             yield self.env.timeout(0)
 
     # operation
-    def operation(self, machine, operating_time, job_name):
+    def operation(self, machine, operating_time):
         #  simulates an operation, it is an abstract function
 
         # operating machine after equipping
@@ -787,7 +791,7 @@ class Lernfabrik:
 
             for i in range(0, amount_to_produce):
                 self.process = self.env.process(self.operation(
-                    required_machine, operating_time, job.get_name()))  # operating machinery
+                    required_machine, operating_time))  # operating machinery
 
                 yield self.process
 
@@ -835,7 +839,7 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180, "finishing process"))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count(OBERTEIL)
