@@ -1108,12 +1108,6 @@ machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
 machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 
-# machines for part creation
-OBERTEIL_MACHINES = [machine_jaespa, machine_gz200, machine_fz12]
-UNTERTEIL_MACHINES = [machine_jaespa, machine_gz200]
-HALTETEIL_MACHINES = [machine_jaespa, machine_gz200]
-RING_MACHINES = [machine_jaespa, machine_gz200, machine_arbeitsplatz_at_gz200]
-
 # instantiating jobs
 # Oberteil creation jobs
 Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
@@ -1196,6 +1190,7 @@ ordered_list.receive_order(copy_orders)
 prio_list = ordered_list.order_by_priority()
 new_list = []
 
+# TODO: remove this
 while len(prio_list) > 1:
     new_list.append(Order(prio_list[0].amount + prio_list[1].amount, prio_list[1].delivery_date))
     prio_list.remove(prio_list[0])
