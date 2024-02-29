@@ -83,21 +83,16 @@ def increase_part_count(part_name, output):
             RING_COUNT += output
 
 
-def decrease_part_count(part_name):
+def decrease_part_count():
     #  decrease respective part count after a partis used for order fulfillment
-    match part_name:
-        case "Oberteil":
-            global OBERTEIL_COUNT
-            OBERTEIL_COUNT = OBERTEIL_COUNT - 1
-        case "Unterteil":
-            global UNTERTEIL_COUNT
-            UNTERTEIL_COUNT = UNTERTEIL_COUNT - 1
-        case "Halteteil":
-            global HALTETEIL_COUNT
-            HALTETEIL_COUNT = HALTETEIL_COUNT - 1
-        case "Ring":
-            global RING_COUNT
-            RING_COUNT = RING_COUNT - 1
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = OBERTEIL_COUNT - 1
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = UNTERTEIL_COUNT - 1
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = HALTETEIL_COUNT - 1
+    global RING_COUNT
+    RING_COUNT = RING_COUNT - 1
 
 
 def get_mz(machine):
@@ -843,10 +838,7 @@ class Lernfabrik:
                 yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
 
                 # decrement for the parts used above to create a whole Unilokk
-                decrease_part_count(OBERTEIL)
-                decrease_part_count(UNTERTEIL)
-                decrease_part_count(HALTETEIL)
-                decrease_part_count(RING)
+                decrease_part_count()
 
                 # increase Unilokk count for the one that is created
                 global UNILOKK_PRODUCED
