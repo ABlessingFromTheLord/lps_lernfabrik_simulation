@@ -970,7 +970,7 @@ class Lernfabrik:
             else:
                 break
 
-    def fulfill_order_with_opt(self, order_number, order):
+    def fulfill_order_with_optimization_without_parallelization(self, order_number, order):
         # received and order and fulfills it
 
         global UNILOKK_COUNT
@@ -1019,7 +1019,7 @@ class Lernfabrik:
         # fulfilling order
         serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
-    def fulfill_with_parallelization(self, order_number, order):
+    def fulfill_with_optimization_and_parallelization(self, order_number, order):
         # received and order and fulfills it
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1092,7 +1092,7 @@ class Lernfabrik:
         self.start_time = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_with_parallelization(
+            yield self.env.process(self.fulfill_with_optimization_and_parallelization(
                 order_number + 1, prioritized_list[order_number]))
 
         self.duration = self.env.now - self.start_time
