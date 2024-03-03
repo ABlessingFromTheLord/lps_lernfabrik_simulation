@@ -594,6 +594,56 @@ def get_depth(job_list):
     return depth
 
 
+def pre_processing_order(previous_drehen_job, execution_sequence):
+    # returns jobs as well as their amount from the üart production sequence
+    
+    jobs = []  # array of jobs needed to fulfill this order
+
+    for part in execution_sequence:
+        jobs_for_part = get_jobs_for_part(part)
+
+        # unpacking jobs into one list full of all the jobs
+        for job in jobs_for_part:
+            jobs.append(job)
+
+    print("\nBefore degree sort:")
+    for job in jobs:
+        print(job.get_name())
+    print("\n")
+
+    amount_of_jobs_to_be_done = len(jobs)
+
+    # sorting jobs based on what machine is needed to run them
+    jobs_sorted_by_machines = sort_jobs_by_machines(jobs)
+
+    # sort jobs based on the part production to achieve minimal set up time
+    min_setup_time_jobs_sequence = (
+        arrange_jobs_by_min_setup_time(previous_drehen_job, jobs_sorted_by_machines))
+
+    return min_setup_time_jobs_sequence, amount_of_jobs_to_be_done
+
+
+def serve_out_and_clear(order, rem_unilokk, day, time, done_jobs):
+    # function to do post-processing such as serve orders and clear variables
+    global UNILOKK_COUNT
+    if UNILOKK_COUNT >= (order.amount - rem_unilokk):
+        UNILOKK_COUNT -= (order.amount - rem_unilokk)
+        global ORDERS_FULFILLED
+        ORDERS_FULFILLED += 1
+
+        if day <= order.delivery_date:
+            global DEADLINES_MET
+            DEADLINES_MET += 1
+
+        done_jobs.clear()
+
+        print(f"Order fulfilled completely at {time}, in day {day} \n\n")
+    else:
+        done_jobs.clear()
+
+        print(f"Order unfulfilled at {time} in day {day} \n\n")
+
+
 def get_parts_needed(order):
     # receives orders and sets the universal variables OBERTEIL_ORDER,
     # UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER
@@ -876,30 +926,11 @@ class Lernfabrik:
             execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
             print("execution sequence by parts", execution_sequence_in_parts)
 
-            # parts creation
-            jobs = []  # array of jobs needed to fulfill this order
+            # getting order necessities
+            min_setup_time_jobs_sequence, amount_of_jobs_to_be_done = (
+                pre_processing_order(self.previous_drehen_job, execution_sequence_in_parts))
 
-            for part in execution_sequence_in_parts:
-                jobs_for_part = get_jobs_for_part(part)
-
-                # unpacking jobs into one list full of all the jobs
-                for job in jobs_for_part:
-                    jobs.append(job)
-
-            print("\nBefore degree sort:")
-            for job in jobs:
-                print(job.get_name())
-            print("\n")
-
-            amount_of_jobs_to_be_done = len(jobs)
-
-            # sorting jobs based on what machine is needed to run them
-            jobs_sorted_by_machines = sort_jobs_by_machines(jobs)
-
-            # sort jobs based on the part production to achieve minimal set up time
-            min_setup_time_jobs_sequence = (
-                arrange_jobs_by_min_setup_time(self.previous_drehen_job, jobs_sorted_by_machines))
-
+            # running the jobs
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
                 to_do = []
 
@@ -932,22 +963,7 @@ class Lernfabrik:
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
         # fulfilling order
-        if UNILOKK_COUNT >= (order.amount - remaining_unilokk):
-            UNILOKK_COUNT -= (order.amount - remaining_unilokk)
-            global ORDERS_FULFILLED
-            ORDERS_FULFILLED += 1
-
-            if self.day <= order.delivery_date:
-                global DEADLINES_MET
-                DEADLINES_MET += 1
-
-            self.done_jobs.clear()
-
-            print(f"Order fulfilled completely at {self.env.now}, in day {self.day} \n\n")
-        else:
-            self.done_jobs.clear()
-
-            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n\n")
+        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
     def fulfill_order_with_opt(self, order_number, order):
         # received and order and fulfills it
