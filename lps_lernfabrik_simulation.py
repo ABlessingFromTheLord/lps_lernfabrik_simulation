@@ -970,8 +970,55 @@ class Lernfabrik:
             else:
                 break
 
+    def fulfill_orders_without_optimization_and_parallelization(self, order_number, order):
+        # fulfillment of orders linearly without any optimization model or parallel
+        # execution of machines
+
+        global UNILOKK_COUNT
+        remaining_unilokk = UNILOKK_COUNT
+        UNILOKK_COUNT = 0
+
+        # need to produce if our order exceeds what is available
+        if order.amount > remaining_unilokk:
+            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
+
+            print("leftover Unilokk ", remaining_unilokk)
+
+            parts_needed = get_parts_needed(working_order)
+            print(parts_needed)
+
+            execution_sequence = amount_of_runs(parts_needed)
+            print("execution sequence", execution_sequence)
+            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
+            print("execution sequence by parts", execution_sequence_in_parts)
+            # okay till here
+
+            # getting jobs needed
+            jobs = get_jobs_from_execution_sequence(execution_sequence_in_parts)
+
+            # order or jobs for minimal Ruestungszeiten
+            for job in jobs:
+                yield self.env.process(self.do_job(job))
+
+        yield self.env.process(self.finish_unilokk_creation())
+
+        # increase based on what is produced minus damaged
+        global UNILOKK_PRODUCED
+        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
+
+        UNILOKK_COUNT += UNILOKK_PRODUCED
+
+        # reset the unilokk produced counter
+        UNILOKK_PRODUCED = 0
+
+        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+
+        # fulfilling order
+        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
+
     def fulfill_order_with_optimization_without_parallelization(self, order_number, order):
-        # received and order and fulfills it
+        # fulfillment of orders in such a way that minimal set up time is achieved
 
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1020,7 +1067,9 @@ class Lernfabrik:
         serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
     def fulfill_with_optimization_and_parallelization(self, order_number, order):
-        # received and order and fulfills it
+        # fulfillment of orders in such a way that minimal set up time is achieved
+        # furthermore parallel execution of machines is done wherever possible
+
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
         UNILOKK_COUNT = 0
@@ -1092,7 +1141,7 @@ class Lernfabrik:
         self.start_time = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_with_optimization_and_parallelization(
+            yield self.env.process(self.fulfill_orders_without_optimization_and_parallelization(
                 order_number + 1, prioritized_list[order_number]))
 
         self.duration = self.env.now - self.start_time
