@@ -50,9 +50,9 @@ UNILOKK_PRODUCED = 0
 UNILOKK_COUNT = 0
 
 # simulation time stats
-BREAKDOWN_TIME = 0
-TRANSPORT_TIME = 0
 ACTIVE_SIM_TIME = 0
+REPAIR_TIME = 0
+TRANSPORT_TIME = 0
 
 
 # global helper functions
@@ -757,7 +757,7 @@ def print_statistics():
     # prints out statistics at the end of the simulation
 
     ruestungs_zeit = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
-    breakdown_time = round((BREAKDOWN_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    repair_time = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
     transport_time = round((TRANSPORT_TIME / ACTIVE_SIM_TIME) * 100, 2)
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
@@ -767,7 +767,7 @@ def print_statistics():
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time is {ACTIVE_SIM_TIME}")
-    print(f"Total Machine breakdown time: {BREAKDOWN_TIME} or {breakdown_time}% of active time")
+    print(f"Total Machine repair time: {REPAIR_TIME} or {repair_time}% of active time")
     print(f"Total Transport time: {TRANSPORT_TIME} or {transport_time}% of active sim time")
     print(f"Total Ruestungszeit: {RUESTUNGS_ZEIT}, or {ruestungs_zeit}% of active sim time")
     print(f"\nJaespa utilization: {jaespa_util}%")
@@ -870,17 +870,13 @@ class Lernfabrik:
         # operating machine after equipping
         while operating_time:
             start = self.env.now
+
             try:
                 yield self.env.timeout(operating_time)  # running operation
 
                 self.process = None
 
-                # updating resource statistics
-                machine_active_time = self.env.now - start
-
-                global ACTIVE_SIM_TIME
-                ACTIVE_SIM_TIME += machine_active_time
-                update_statistics(machine_active_time, machine)
+                update_statistics(operating_time, machine)
 
                 operating_time = 0
 
@@ -888,7 +884,6 @@ class Lernfabrik:
 
             except simpy.Interrupt:
                 self.currently_broken = True
-                begin = self.env.now
 
                 print(f"\nMachine{machine} broke down at {self.env.now}")
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
@@ -898,9 +893,8 @@ class Lernfabrik:
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
 
-                breakdown_time = self.env.now - begin
-                global BREAKDOWN_TIME
-                BREAKDOWN_TIME += breakdown_time
+                global REPAIR_TIME
+                REPAIR_TIME += repair_time
 
                 print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
                       f"seconds, continues at {self.env.now}\n")
@@ -986,19 +980,15 @@ class Lernfabrik:
 
         # simulating transport time between the machine and the finishing area
 
-        global ACTIVE_SIM_TIME
         global TRANSPORT_TIME
-
         if job.get_part_name() == machine_fz12:
             # 50 seconds are needed between the mill and the Arbeitsplatz 2
             yield self.env.timeout(50)
-            ACTIVE_SIM_TIME += (transport_time + equipping_time + (operating_time * amount_to_produce) + 50)
             TRANSPORT_TIME += (transport_time + 50)
         else:
             # all other parts need the GZ200 as end machine hence can be grouped in else
             # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
             yield self.env.timeout(70)
-            ACTIVE_SIM_TIME += (transport_time + equipping_time + (operating_time * amount_to_produce) + 70)
             TRANSPORT_TIME += (transport_time + 70)
 
         self.done_jobs.append(job)
@@ -1035,9 +1025,8 @@ class Lernfabrik:
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
-
-                global ACTIVE_SIM_TIME
-                ACTIVE_SIM_TIME += 20
+                global TRANSPORT_TIME
+                TRANSPORT_TIME += 20
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
@@ -1222,6 +1211,9 @@ class Lernfabrik:
         end = self.env.now
 
         self.duration = end - start
+        global ACTIVE_SIM_TIME
+        ACTIVE_SIM_TIME += self.duration
+
         print("Fulfilling orders took ", self.duration, " units of time")
         self.stop_simulation = True
 
