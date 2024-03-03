@@ -8,9 +8,6 @@ from Order import Order
 from OrderList import OrderList
 
 # global variables
-# breaking probability
-BROKEN_ZEIT = 60
-REPAIR_ZEIT = 60
 MTTR = 60
 
 # part names / working strings
@@ -39,6 +36,7 @@ UNTERTEIL_COUNT = 0
 HALTETEIL_COUNT = 0
 RING_COUNT = 0
 
+# order related stats
 ORDERS_FULFILLED = 0
 DEADLINES_MET = 0
 
@@ -50,6 +48,9 @@ UNILOKK_PRODUCED = 0
 
 # unilokk created
 UNILOKK_COUNT = 0
+
+# simulation time stats
+ACTIVE_SIM_TIME = 0
 
 
 # global helper functions
@@ -727,6 +728,40 @@ def get_parts_needed(order):
     return [OBERTEIL_ORDER, UNTERTEIL_ORDER, HALTETEIL_ORDER, RING_ORDER]
 
 
+def update_statistics(duration, machine):
+    # updates resource statistics
+    if machine == machine_jaespa:
+        global MACHINE_JAESPA_ACTIVE_TIME
+        MACHINE_JAESPA_ACTIVE_TIME += duration
+
+    elif machine == machine_gz200:
+        global MACHINE_GZ200_ACTIVE_TIME
+        MACHINE_GZ200_ACTIVE_TIME += duration
+
+    elif machine == machine_fz12:
+        global MACHINE_FZ12_ACTIVE_TIME
+        MACHINE_FZ12_ACTIVE_TIME += duration
+
+    elif machine == machine_arbeitsplatz_at_gz200:
+        global MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME
+        MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME += duration
+
+    elif machine == machine_arbeitsplatz_2:
+        global MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME
+        MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
+
+
+def print_statistics():
+    # prints out statistics at the end of the simulation
+    print(f"\ntotal ruestungszeit: {RUESTUNGS_ZEIT}, or {(RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100}% of active sim time")
+    print(f" Jaespa utilization: {(MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100}")
+    print(f"GZ200 utilization: {(MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100}")
+    print(f"FZ12 utilization: {(MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100}")
+    print(f"Workstation at GZ200 utilization: "
+          f"{(MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100}")
+    print(f"Workstation 2 utilization: {(MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100}")
+
+
 # simulation class
 class Lernfabrik:
     # this class simulates all processes taking place in the factory
@@ -824,7 +859,15 @@ class Lernfabrik:
                 yield self.env.timeout(operating_time)  # running operation
 
                 self.process = None
+
+                # updating resource statistics
+                machine_active_time = self.env.now - start
+                global ACTIVE_SIM_TIME
+                ACTIVE_SIM_TIME += machine_active_time
+                update_statistics(machine_active_time, machine)
+
                 operating_time = 0
+
                 yield self.env.process(self.time_management())
 
             except simpy.Interrupt:
@@ -884,7 +927,7 @@ class Lernfabrik:
                   " to ", job.get_name(), " is ", equipping_time)
 
         global RUESTUNGS_ZEIT
-        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes#
+        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
 
         if required_machine == machine_gz200:
             self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
@@ -921,13 +964,17 @@ class Lernfabrik:
             print(math.floor(amount_to_produce), part_name, "(s) was created at ", self.env.now, "\n")
 
         # simulating transport time between the machine and the finishing area
+
+        global ACTIVE_SIM_TIME
         if job.get_part_name() == machine_fz12:
             # 50 seconds are needed between the mill and the Arbeitsplatz 2
             yield self.env.timeout(50)
+            ACTIVE_SIM_TIME += (transport_time + equipping_time + (operating_time * amount_to_produce) + 50)
         else:
             # all other parts need the GZ200 as end machine hence can be grouped in else
             # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
             yield self.env.timeout(70)
+            ACTIVE_SIM_TIME += (transport_time + equipping_time + (operating_time * amount_to_produce) + 70)
 
         self.done_jobs.append(job)
 
@@ -963,6 +1010,9 @@ class Lernfabrik:
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
+
+                global ACTIVE_SIM_TIME
+                ACTIVE_SIM_TIME += 20
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
@@ -1138,13 +1188,15 @@ class Lernfabrik:
         prioritized_list = self.orders.order_by_priority()
 
         # store starting time
-        self.start_time = self.env.now
+        start = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_orders_without_optimization_and_parallelization(
+            yield self.env.process(self.fulfill_with_optimization_and_parallelization(
                 order_number + 1, prioritized_list[order_number]))
 
-        self.duration = self.env.now - self.start_time
+        end = self.env.now
+
+        self.duration = end - start
         print("Fulfilling orders took ", self.duration, " units of time")
         self.stop_simulation = True
 
@@ -1161,6 +1213,13 @@ machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
 machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+
+# resource statistics
+MACHINE_JAESPA_ACTIVE_TIME = 0
+MACHINE_GZ200_ACTIVE_TIME = 0
+MACHINE_FZ12_ACTIVE_TIME = 0
+MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME = 0
+MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME = 0
 
 # instantiating jobs
 # Oberteil creation jobs
@@ -1238,23 +1297,6 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-ordered_list = OrderList()
-copy_orders = orders[:]
-ordered_list.receive_order(copy_orders)
-prio_list = ordered_list.order_by_priority()
-new_list = []
-
-# TODO: remove this
-while len(prio_list) > 1:
-    new_list.append(Order(prio_list[0].amount + prio_list[1].amount, prio_list[1].delivery_date))
-    prio_list.remove(prio_list[0])
-    prio_list.remove(prio_list[0])
-
-if len(prio_list) == 1:
-    new_list.append(prio_list[0])
-
 env.process(fabric.fulfill_orders(orders))
 env.run()
-
-# analysis and results
-print("\ntotal ruestungszeit: ", RUESTUNGS_ZEIT, "\n")
+print_statistics()
