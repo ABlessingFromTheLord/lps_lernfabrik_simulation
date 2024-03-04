@@ -44,7 +44,6 @@ DEADLINES_MET = 0
 RUESTUNGS_ZEIT = 0
 REPAIR_TIME = 0
 TRANSPORT_TIME = 0
-MTTR_SUM = 0
 
 # unilokk just produced
 UNILOKK_PRODUCED = 0
@@ -672,20 +671,7 @@ def get_depth(job_list):
     return depth
 
 
-def pre_processing_order_wo(jobs, previous_drehen_job):
-    # returns jobs sported in the order of minimal set-up time
-
-    # ordering the drehjobs in the order of minimal Ruestungszeit
-    drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-    drehen_jobs = sort_drehjobs_by_minimal_runtime(previous_drehen_job, drehen_jobs)
-    min_run = get_min_run(drehen_jobs)
-
-    sorted_jobs = get_jobs_by_min_set_up_sequence(min_run, jobs)
-
-    return sorted_jobs
-
-
-def pre_processing_order_wop(previous_drehen_job, execution_sequence):
+def pre_processing_order(previous_drehen_job, execution_sequence):
     # returns jobs as well as their amount from the part production sequence
     # wop stands for with optimization of set-up time and parallel execution of jobs
 
@@ -774,17 +760,13 @@ def print_resource_statistics():
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_workstation_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     workstation_2_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
-    miscellaneous = round(100 - (setup + repair + transport + jaespa_util + gz200_util + fz12_util
-                                 + gz200_workstation_util + workstation_2_util), 2)
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time: {ACTIVE_SIM_TIME}\n")
     print(f"Optimum batch: {OPTIMUM_BATCH}")
-
     print(f"Set up time: {RUESTUNGS_ZEIT} or {setup}%")
     print(f"Transport time: {TRANSPORT_TIME} or {transport}%")
     print(f"Repair time: {REPAIR_TIME} or {repair}%")
-    print(f"Miscellaneous: {miscellaneous}%")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
@@ -822,6 +804,7 @@ class Lernfabrik:
         self.done_jobs = []
         self.breakdown_limit = 0
         self.stop_simulation = False
+        self.idling = 0
 
     def time_management(self):
         # checks the time and day in which we are
@@ -861,15 +844,15 @@ class Lernfabrik:
 
         elif self.end_of_break_2 <= self.env.now < self.end_of_shift_2 and self.shift_number == 2:
             # ending shift 2 and day
-            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
-            yield self.env.timeout(28800)
-
             # resetting variables for the next day
             self.shift_number = 1
             self.taken_break_1 = False
             self.taken_break_2 = False
             self.last_day = self.day
             self.day += 1  # a new day starts
+
+            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
+            yield self.env.timeout(28800)
             self.start_of_shift_1 = self.env.now
             self.end_of_shift_1 = self.env.now + 50400
             self.start_of_break_1 = self.env.now + 7200
@@ -877,6 +860,7 @@ class Lernfabrik:
             self.start_of_break_2 = self.env.now + 19800
             self.end_of_break_2 = self.env.now + 19830
             self.end_of_shift_2 = self.env.now + 79200
+
             print(f"\nShift {self.shift_number} of day {self.day} starts at {self.start_of_shift_1}")
 
         else:
@@ -933,8 +917,6 @@ class Lernfabrik:
             # if true then machine breaks down, else continues running
             if break_or_not:
                 yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
-                global MTTR_SUM
-                MTTR_SUM += MTTR
                 with machine.request(priority=priority, preempt=preempt) as request:
                     yield request
 
@@ -1094,6 +1076,7 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
+                    self.idling += 1
 
         yield self.env.process(self.finish_unilokk_creation())
 
@@ -1139,7 +1122,7 @@ class Lernfabrik:
 
             # getting order necessities
             min_setup_time_jobs_sequence, amount_of_jobs_to_be_done = (
-                pre_processing_order_wop(self.previous_drehen_job, execution_sequence_in_parts))
+                pre_processing_order(self.previous_drehen_job, execution_sequence_in_parts))
 
             # running the jobs
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
@@ -1155,6 +1138,7 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
+                    self.idling += 1
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -1193,11 +1177,11 @@ class Lernfabrik:
         end = self.env.now
 
         self.duration = end - start
-        global ACTIVE_SIM_TIME
-        ACTIVE_SIM_TIME += (self.duration - self.total_break_time - (28800 * self.error_times))
-
-        print("Fulfilling orders took ", self.duration, " units of time")
+        print(f"Fulfilling orders took {self.duration} units of time")
         self.stop_simulation = True
+
+        global ACTIVE_SIM_TIME
+        ACTIVE_SIM_TIME += (self.duration - (self.total_break_time + (28800 * self.error_times)))
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
         print("\nDeadlines met:", DEADLINES_MET, "/", len(prioritized_list))
