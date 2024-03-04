@@ -51,8 +51,6 @@ UNILOKK_COUNT = 0
 
 # simulation time stats
 ACTIVE_SIM_TIME = 0
-REPAIR_TIME = 0
-TRANSPORT_TIME = 0
 
 
 # global helper functions
@@ -753,12 +751,9 @@ def update_statistics(duration, machine):
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
 
 
-def print_statistics():
-    # prints out statistics at the end of the simulation
-
-    ruestungs_zeit = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
-    repair_time = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
-    transport_time = round((TRANSPORT_TIME / ACTIVE_SIM_TIME) * 100, 2)
+def print_resource_statistics():
+    # prints out statistics at the end of the simulation to compare how a resource was used
+    # in comparison to the active simulation time
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
@@ -766,10 +761,7 @@ def print_statistics():
     workstation_2_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
 
     print(f"\nSTATISTICS")
-    print(f"Active simulation time is {ACTIVE_SIM_TIME}")
-    print(f"Total Machine repair time: {REPAIR_TIME} or {repair_time}% of active time")
-    print(f"Total Transport time: {TRANSPORT_TIME} or {transport_time}% of active sim time")
-    print(f"Total Ruestungszeit: {RUESTUNGS_ZEIT}, or {ruestungs_zeit}% of active sim time")
+    print(f"Active simulation time: {ACTIVE_SIM_TIME}")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
@@ -893,9 +885,6 @@ class Lernfabrik:
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
 
-                global REPAIR_TIME
-                REPAIR_TIME += repair_time
-
                 print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
                       f"seconds, continues at {self.env.now}\n")
 
@@ -978,19 +967,6 @@ class Lernfabrik:
             increase_part_count(part_name, amount_to_produce)  # add newly created part
             print(math.floor(amount_to_produce), part_name, "(s) was created at ", self.env.now, "\n")
 
-        # simulating transport time between the machine and the finishing area
-
-        global TRANSPORT_TIME
-        if job.get_part_name() == machine_fz12:
-            # 50 seconds are needed between the mill and the Arbeitsplatz 2
-            yield self.env.timeout(50)
-            TRANSPORT_TIME += (transport_time + 50)
-        else:
-            # all other parts need the GZ200 as end machine hence can be grouped in else
-            # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
-            yield self.env.timeout(70)
-            TRANSPORT_TIME += (transport_time + 70)
-
         self.done_jobs.append(job)
 
     def series_job_execution(self, jobs_in_series):
@@ -1025,8 +1001,6 @@ class Lernfabrik:
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
-                global TRANSPORT_TIME
-                TRANSPORT_TIME += 20
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
@@ -1316,4 +1290,4 @@ order_10 = Order(25, 65)
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 env.process(fabric.fulfill_orders(orders))
 env.run()
-print_statistics()
+print_resource_statistics()
