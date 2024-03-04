@@ -52,6 +52,10 @@ UNILOKK_PRODUCED = 0
 # unilokk created
 UNILOKK_COUNT = 0
 
+# optimum batch
+# index coding: 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
+OPTIMUM_BATCH = [0, 0, 0, 0]
+
 # simulation time stats
 ACTIVE_SIM_TIME = 0
 
@@ -301,6 +305,11 @@ def amount_of_runs(order_list):
                     case 3:
                         order_list[order_instance] -= RING_COUNT
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
+
+    # adding to get the optimal batch
+    global OPTIMUM_BATCH
+    for i in range(len(OPTIMUM_BATCH)):
+        OPTIMUM_BATCH[i] += order_list[i]
 
     return order_list
 
@@ -770,6 +779,8 @@ def print_resource_statistics():
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time: {ACTIVE_SIM_TIME}\n")
+    print(f"Optimum batch: {OPTIMUM_BATCH}")
+
     print(f"Set up time: {RUESTUNGS_ZEIT} or {setup}%")
     print(f"Transport time: {TRANSPORT_TIME} or {transport}%")
     print(f"Repair time: {REPAIR_TIME} or {repair}%")
