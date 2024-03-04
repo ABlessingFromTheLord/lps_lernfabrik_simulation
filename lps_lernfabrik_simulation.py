@@ -780,6 +780,7 @@ class Lernfabrik:
         self.shift_number = 1
         self.day = 1  # to keep track of day
         self.last_day = 0
+        self.total_break_time = 0
         self.taken_break_1 = False
         self.start_of_break_1 = 7200
         self.end_of_break_1 = 0  # is set at an end of break
@@ -804,6 +805,7 @@ class Lernfabrik:
             # taking first break of shift
             print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(15)
+            self.total_break_time += 15
             print(f"Break ends at {self.env.now}\n")
 
             self.taken_break_1 = True
@@ -813,6 +815,7 @@ class Lernfabrik:
             # taking second break of shift
             print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(30)
+            self.total_break_time += 30
             print(f"Break ends at {self.env.now}\n")
 
             self.taken_break_2 = True
@@ -835,6 +838,7 @@ class Lernfabrik:
             # ending shift 2 and day
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
             yield self.env.timeout(28800)
+            self.total_break_time += 28800
 
             # resetting variables for the next day
             self.shift_number = 1
@@ -1186,7 +1190,7 @@ class Lernfabrik:
 
         self.duration = end - start
         global ACTIVE_SIM_TIME
-        ACTIVE_SIM_TIME += self.duration
+        ACTIVE_SIM_TIME += (self.duration - self.total_break_time)
 
         print("Fulfilling orders took ", self.duration, " units of time")
         self.stop_simulation = True
