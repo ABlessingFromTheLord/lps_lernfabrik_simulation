@@ -40,8 +40,11 @@ RING_COUNT = 0
 ORDERS_FULFILLED = 0
 DEADLINES_MET = 0
 
-# ruestungszeit
+# set up, repair and transport time
 RUESTUNGS_ZEIT = 0
+REPAIR_TIME = 0
+TRANSPORT_TIME = 0
+MTTR_SUM = 0
 
 # unilokk just produced
 UNILOKK_PRODUCED = 0
@@ -754,6 +757,10 @@ def update_statistics(duration, machine):
 def print_resource_statistics():
     # prints out statistics at the end of the simulation to compare how a resource was used
     # in comparison to the active simulation time
+    setup = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
+    repair = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    transport = round((TRANSPORT_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    mttr = round((MTTR_SUM / ACTIVE_SIM_TIME)* 100, 2)
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
@@ -762,7 +769,10 @@ def print_resource_statistics():
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time: {ACTIVE_SIM_TIME}")
-    print(f"Set up time: {RUESTUNGS_ZEIT}")
+    print(f"Set up time: {RUESTUNGS_ZEIT} or {setup}%")
+    print(f"Transport time: {TRANSPORT_TIME} or {transport}%")
+    print(f"Total MTTR: {MTTR_SUM} or {mttr}%")
+    print(f"Repair time: {REPAIR_TIME} or {repair}%")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
@@ -778,6 +788,7 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.start_time = None
         self.duration = None
+        self.error_times = 0
         self.shift_number = 1
         self.day = 1  # to keep track of day
         self.last_day = 0
@@ -797,6 +808,7 @@ class Lernfabrik:
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.breakdown_limit = 0
         self.stop_simulation = False
 
     def time_management(self):
@@ -839,7 +851,6 @@ class Lernfabrik:
             # ending shift 2 and day
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
             yield self.env.timeout(28800)
-            self.total_break_time += 28800
 
             # resetting variables for the next day
             self.shift_number = 1
@@ -867,12 +878,16 @@ class Lernfabrik:
         # operating machine after equipping
         while operating_time:
             start = self.env.now
+            start_day = self.day
 
             try:
                 yield self.env.timeout(operating_time)  # running operation
 
                 self.process = None
+                end_day = self.day
 
+                if start_day != end_day:
+                    self.error_times += 1
                 update_statistics(operating_time, machine)
 
                 operating_time = 0
@@ -889,6 +904,8 @@ class Lernfabrik:
                 # deviation of 30 seconds
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
+                global REPAIR_TIME
+                REPAIR_TIME += repair_time
 
                 print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
                       f"seconds, continues at {self.env.now}\n")
@@ -898,19 +915,23 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while not self.stop_simulation:
-            yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+        while self.breakdown_limit > 0:
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
 
             # if true then machine breaks down, else continues running
             if break_or_not:
+                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
+                global MTTR_SUM
+                MTTR_SUM += MTTR
                 with machine.request(priority=priority, preempt=preempt) as request:
-                    assert isinstance(self.env.now, int), type(self.env.now)
                     yield request
-                    assert isinstance(self.env.now, int), type(self.env.now)
 
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
+                        self.breakdown_limit -= 1
+
+            if self.stop_simulation:
+                break
 
     def do_job(self, job):
         # performs a certain job as subprocess in a part creation process
@@ -918,6 +939,8 @@ class Lernfabrik:
         part_name = job.get_part_name()
         required_machine = job.get_machine_required()
         transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
+        global TRANSPORT_TIME
+        TRANSPORT_TIME += transport_time
 
         # getting amount to be produced by job
         if job.get_depth() == 0:
@@ -947,6 +970,9 @@ class Lernfabrik:
             print("\nTransport time for ", job.get_name(), "is", transport_time)
             yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
+
+            # setting limit
+            self.breakdown_limit = ((1 - (get_mz(required_machine))) * 100)
 
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
 
@@ -1006,6 +1032,8 @@ class Lernfabrik:
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
+                global TRANSPORT_TIME
+                TRANSPORT_TIME += 20
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
@@ -1191,7 +1219,7 @@ class Lernfabrik:
 
         self.duration = end - start
         global ACTIVE_SIM_TIME
-        ACTIVE_SIM_TIME += (self.duration - self.total_break_time)
+        ACTIVE_SIM_TIME += (self.duration - self.total_break_time - (28800 * self.error_times))
 
         print("Fulfilling orders took ", self.duration, " units of time")
         self.stop_simulation = True
