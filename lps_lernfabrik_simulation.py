@@ -762,6 +762,7 @@ def print_resource_statistics():
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time: {ACTIVE_SIM_TIME}")
+    print(f"Set up time: {RUESTUNGS_ZEIT}")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
