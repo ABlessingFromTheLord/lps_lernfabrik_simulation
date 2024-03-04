@@ -51,6 +51,7 @@ UNILOKK_COUNT = 0
 
 # simulation time stats
 ACTIVE_SIM_TIME = 0
+REPAIR_TIME = 0
 
 
 # global helper functions
@@ -754,6 +755,8 @@ def update_statistics(duration, machine):
 def print_resource_statistics():
     # prints out statistics at the end of the simulation to compare how a resource was used
     # in comparison to the active simulation time
+    repair = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    setup = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
@@ -762,12 +765,33 @@ def print_resource_statistics():
 
     print(f"\nSTATISTICS")
     print(f"Active simulation time: {ACTIVE_SIM_TIME}")
-    print(f"Set up time: {RUESTUNGS_ZEIT}")
+    print(f"Repair time: {REPAIR_TIME} or {repair}%")
+    print(f"Set up time: {RUESTUNGS_ZEIT} or {setup}%")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
     print(f"Workstation at GZ200 utilization: {gz200_workstation_util}%")
     print(f"Workstation 2 utilization: {workstation_2_util}%")
+
+
+def clear_stats():
+    # clear statistics in case of a series of simulations
+    global OBERTEIL_COUNT
+    OBERTEIL_COUNT = 0
+    global UNTERTEIL_COUNT
+    UNTERTEIL_COUNT = 0
+    global HALTETEIL_COUNT
+    HALTETEIL_COUNT = 0
+    global RING_COUNT
+    RING_COUNT = 0
+
+    global UNILOKK_COUNT
+    UNILOKK_COUNT = 0
+    global RUESTUNGS_ZEIT
+    RUESTUNGS_ZEIT = 0
+
+    global ORDERS_FULFILLED
+    ORDERS_FULFILLED = 0
 
 
 # simulation class
@@ -797,6 +821,7 @@ class Lernfabrik:
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.breaking_limit = 0
         self.stop_simulation = False
 
     def time_management(self):
@@ -889,6 +914,8 @@ class Lernfabrik:
                 # deviation of 30 seconds
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
+                global REPAIR_TIME
+                REPAIR_TIME += repair_time
 
                 print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
                       f"seconds, continues at {self.env.now}\n")
@@ -898,7 +925,7 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while not self.stop_simulation:
+        while self.breaking_limit > 0:
             yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
 
@@ -911,6 +938,7 @@ class Lernfabrik:
 
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
+                        self.breaking_limit -= 1
 
     def do_job(self, job):
         # performs a certain job as subprocess in a part creation process
@@ -947,6 +975,8 @@ class Lernfabrik:
             print("\nTransport time for ", job.get_name(), "is", transport_time)
             yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
+
+            self.breaking_limit = (1 - get_mz(required_machine)) * 100
 
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
 
@@ -1279,10 +1309,7 @@ Finishing_Jobs = [Fertigstellung]
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
-
-for i in range(5, 50):
-
-    orders = [Order(i, 1)]
-    env.process(fabric.fulfill_orders(orders))
-    env.run()
-    print_resource_statistics()
+orders = [Order(13, 1)]
+env.process(fabric.fulfill_orders(orders))
+env.run()
+print_resource_statistics()
