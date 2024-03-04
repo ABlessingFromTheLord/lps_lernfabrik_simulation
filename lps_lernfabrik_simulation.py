@@ -51,6 +51,7 @@ UNILOKK_COUNT = 0
 
 # simulation time stats
 ACTIVE_SIM_TIME = 0
+INACTIVITY_TIME = 0
 REPAIR_TIME = 0
 TRANSPORT_TIME = 0
 
@@ -87,7 +88,7 @@ def increase_part_count(part_name, output):
 
 
 def decrease_part_count():
-    #  decrease respective part count after a partis used for order fulfillment
+    #  decrease the respective part count after a partis used for order fulfillment
     global OBERTEIL_COUNT
     OBERTEIL_COUNT = OBERTEIL_COUNT - 1
     global UNTERTEIL_COUNT
@@ -112,7 +113,7 @@ def get_mz(machine):
 
 def get_quality_grade(machine):
     # returns the rate of error for a certain machine
-    # i.e if quality grade is 98%, it means 98% of material produced are usable to the next stage
+    # i.e., if quality grade is 98%, it means 98% of material produced are usable to the next stage
     # 2% are thrown away
     if machine == machine_jaespa:
         return 1
@@ -141,8 +142,8 @@ def get_cumulative_quality_grade(part_name):
 
 
 def get_human_error_by_part(loss_ratio, part_name):
-    # a combined (1- 0.84) * amount is the human error
-    # since different parts come in different quantities, use ratio to this amount
+    # a combined (1-0.84) * amount is the human error
+    # since different parts come in different quantities, use a ratio to this amount
     loss_ratio = Decimal(loss_ratio)  # convert to decimal for ease of use
 
     match part_name:
@@ -157,7 +158,7 @@ def get_human_error_by_part(loss_ratio, part_name):
 
 
 def get_output_per_part(part_name):
-    # returns amount of parts created from a 3000mm long rod of raw material
+    # returns number of parts created from a 3000mm long rod of raw material
     match part_name:
         case "Oberteil":
             return 17
@@ -197,7 +198,7 @@ def get_amount_to_produce(job):
 
 
 def all_jobs_completed_for_part(part_name):
-    # checks if the jobs necessary to complete  a certain part creation are done
+    # checks if the jobs necessary to complete a certain part creation are done
     # when all jobs required for a certain part creation are done it returns true
     # resets all the booleans completed in jobs for the next round of part creation
     # if there are more of the same part to be created
@@ -214,7 +215,7 @@ def all_jobs_completed_for_part(part_name):
 
 
 def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
-    # inserts statistics into out sqlite database
+    # inserts statistics into out a sqlite database
     sqlite_connection = sqlite3.connect('statistics.db')
     try:
         cursor = sqlite_connection.cursor()
@@ -240,7 +241,7 @@ def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
 
 
 def amount_of_runs(order_list):
-    # returns amount of runs needed to fulfill the order
+    # returns number of runs needed to fulfill the order
     # it depends on how much order is left and how much is needed
     # at the beginning nothing is produced so nothing is left
 
@@ -372,9 +373,9 @@ def get_jobs_from_execution_sequence(execution_sequence):
     return jobs
 
 
-def get_equipping_time(job_1, job_2):
-    # returns the equipping time of the job about to be executed
-    # if the job is a Drehjob, ie, a job that needs machine gz200
+def get_set_up_time(job_1, job_2):
+    # returns the set-up time of the job about to be executed
+    # if the job is a Drehjob, i.e., a job that needs machine gz200
     # then argument job_1 is relevant, otherwise it is irrelevant although passed as argument
 
     if job_2.get_machine_required() == machine_gz200:
@@ -455,7 +456,7 @@ def sort_jobs_by_machines(jobs_list):
 
 
 def get_transport_time_between_machines(part_name, machine):
-    # returns the time taken to transport a part from previous machine to this one
+    # returns the time taken to transport a part from the previous machine to this one
     if machine == machine_jaespa:
         return 60  # 60 seconds are needed to get to the saw from the lager
     elif machine == machine_gz200:
@@ -465,7 +466,7 @@ def get_transport_time_between_machines(part_name, machine):
     elif machine == machine_arbeitsplatz_at_gz200:
         return 0  # work done at GZ200 hence no transport
     elif machine == machine_arbeitsplatz_2 and part_name == "Oberteil":
-        return 50  # 50 seconds are needed from the  milling machine to Arbeitsplatz 2
+        return 50  # 50 seconds are needed from the milling machine to Arbeitsplatz 2
     elif machine == machine_arbeitsplatz_2 and part_name != "Oberteil":
         return 70  # 70 seconds are needed from the GZ200 to Arbeitsplatz 2
 
@@ -473,11 +474,11 @@ def get_transport_time_between_machines(part_name, machine):
 def get_next_job_with_minimal_runtime(job, job_list):
     # returns the next Drehjob that should be run after this one to get minimal equipping times
     next_job = job_list[0]
-    min_runtime = get_equipping_time(job, job_list[0])
+    min_runtime = get_set_up_time(job, job_list[0])
 
     for i in range(1, len(job_list)):
-        if get_equipping_time(job, job_list[i]) < min_runtime:
-            min_runtime = get_equipping_time(job, job_list[i])
+        if get_set_up_time(job, job_list[i]) < min_runtime:
+            min_runtime = get_set_up_time(job, job_list[i])
             next_job = job_list[i]
 
     return next_job
@@ -538,7 +539,7 @@ def get_min_run(drehen_jobs):
 
 def get_jobs_by_min_set_up_sequence(min_set_up_sequence, jobs):
     # based on the minimal set upo time of Drehen jobs, sorts all jobs for execution in
-    # accordance to the minimal set up sequence
+    # accordance to the minimal set-up sequence
     to_return = []
 
     for part_name in min_set_up_sequence:
@@ -604,14 +605,14 @@ def machine_is_free(machine):
 
 def arrange_jobs_by_min_setup_time(previous_drehen, job_list):
     # receives jobs after they have been sorted into list of list based on machines needed
-    # to run respective job, returns all jobs in the list of list sorted by minimal runtime
+    # to run a respective job, returns all jobs in the list of list sorted by minimal runtime
     # bottleneck are the drehen jobs, so their sequence with minimal setup time is first found
     # then all other jobs are arranged in the same way
 
     # get the drehen jobs
     drehen_jobs = [x[0] for x in job_list if x[0].get_machine_required() == machine_gz200 for x[0] in x]
 
-    # get their sequence of execution such that minimal set up time is achieved
+    # get their sequence of execution such that minimal set-up time is achieved
     min_dreh_jobs_sequence = sort_drehjobs_by_minimal_runtime(previous_drehen, drehen_jobs)
 
     print("\n min drehjobs sequence: ")
@@ -648,7 +649,7 @@ def get_parallel_runnable_jobs(jobs_list):
 
 
 def get_depth(job_list):
-    # depth is defined as the amount of machines that can be run at the same time
+    # depth is defined as the number of machines that can be run at the same time
     # in contrast to degree which is the stage of a job in the sequence of execution
     depth = 0
 
@@ -663,7 +664,7 @@ def get_depth(job_list):
 
 
 def pre_processing_order_wo(jobs, previous_drehen_job):
-    # returns jobs sported in the order of minimal set up time
+    # returns jobs sported in the order of minimal set-up time
 
     # ordering the drehjobs in the order of minimal Ruestungszeit
     drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
@@ -677,7 +678,7 @@ def pre_processing_order_wo(jobs, previous_drehen_job):
 
 def pre_processing_order_wop(previous_drehen_job, execution_sequence):
     # returns jobs as well as their amount from the part production sequence
-    # wop stands for with optimization of set up time and parallel execution of jobs
+    # wop stands for with optimization of set-up time and parallel execution of jobs
 
     jobs = get_jobs_from_execution_sequence(execution_sequence)
 
@@ -686,7 +687,7 @@ def pre_processing_order_wop(previous_drehen_job, execution_sequence):
     # sorting jobs based on what machine is needed to run them
     jobs_sorted_by_machines = sort_jobs_by_machines(jobs)
 
-    # sort jobs based on the part production to achieve minimal set up time
+    # sort jobs based on the part production to achieve minimal set-up time
     min_setup_time_jobs_sequence = (
         arrange_jobs_by_min_setup_time(previous_drehen_job, jobs_sorted_by_machines))
 
@@ -766,7 +767,8 @@ def print_statistics():
     workstation_2_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
 
     print(f"\nSTATISTICS")
-    print(f"Active simulation time is {ACTIVE_SIM_TIME}")
+    print(f"Active time is {ACTIVE_SIM_TIME}")
+    print(f"Inactivity time is {INACTIVITY_TIME}")
     print(f"Total Machine repair time: {REPAIR_TIME} or {repair_time}% of active time")
     print(f"Total Transport time: {TRANSPORT_TIME} or {transport_time}% of active sim time")
     print(f"Total Ruestungszeit: {RUESTUNGS_ZEIT}, or {ruestungs_zeit}% of active sim time")
@@ -790,7 +792,7 @@ class Lernfabrik:
         self.last_day = 0
         self.taken_break_1 = False
         self.start_of_break_1 = 7200
-        self.end_of_break_1 = 0  # is set at end of break
+        self.end_of_break_1 = 0  # is set at an end of break
         self.taken_break_2 = False
         self.start_of_break_2 = 19800
         self.end_of_break_2 = 19830 * self.day
@@ -799,6 +801,7 @@ class Lernfabrik:
         self.end_of_shift_1 = 50400
         self.end_of_shift_2 = 79200 * self.day
         self.overtime_allowed = 3600 * self.day
+        self.total_pause_time = 0
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
@@ -812,6 +815,7 @@ class Lernfabrik:
             # taking first break of shift
             print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(15)
+            self.total_pause_time += 15
             print(f"Break ends at {self.env.now}\n")
 
             self.taken_break_1 = True
@@ -821,6 +825,7 @@ class Lernfabrik:
             # taking second break of shift
             print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
             yield self.env.timeout(30)
+            self.total_pause_time += 30
             print(f"Break ends at {self.env.now}\n")
 
             self.taken_break_2 = True
@@ -843,6 +848,7 @@ class Lernfabrik:
             # ending shift 2 and day
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
             yield self.env.timeout(28800)
+            #self.total_pause_time += 28800
 
             # resetting variables for the next day
             self.shift_number = 1
@@ -919,7 +925,7 @@ class Lernfabrik:
                         self.process.interrupt()
 
     def do_job(self, job):
-        # performs a certain job as subprocess in part creation process
+        # performs a certain job as subprocess in a part creation process
         # getting values for use
         part_name = job.get_part_name()
         required_machine = job.get_machine_required()
@@ -927,22 +933,19 @@ class Lernfabrik:
 
         # getting amount to be produced by job
         if job.get_depth() == 0:
-            # this is the initial job in part production process
+            # this is the initial job in a part production process
             amount_to_produce = get_amount_to_produce(job)
         else:
             # at least one job has been done so that amount can be propagated that amount to this job
             amount_to_produce = job.get_job_before().get_amount_produced()
 
-        equipping_time = get_equipping_time(self.previous_drehen_job, job)
+        set_up_time = get_set_up_time(self.previous_drehen_job, job)
         operating_time = job.get_duration()
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
             print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
-                  " to ", job.get_name(), " is ", equipping_time)
-
-        global RUESTUNGS_ZEIT
-        RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
+                  " to ", job.get_name(), " is ", set_up_time)
 
         if required_machine == machine_gz200:
             self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
@@ -952,9 +955,14 @@ class Lernfabrik:
 
             print("\nTransport time for ", job.get_name(), "is", transport_time)
             yield self.env.timeout(transport_time)
-            yield self.env.timeout(equipping_time)
+            global TRANSPORT_TIME
+            TRANSPORT_TIME += transport_time   # collect Transport time for statistical purposes
 
-            self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
+            yield self.env.timeout(set_up_time)
+            global RUESTUNGS_ZEIT
+            RUESTUNGS_ZEIT += set_up_time  # collect Ruestungszeit for statistical purposes
+
+            # self.env.process(self.break_machine(required_machine, 2, True)) # starting breakdown function
 
             print(f"{job.get_name()} of {amount_to_produce} parts will take {operating_time * amount_to_produce} "
                   f"seconds, started execution at {self.env.now}")
@@ -974,27 +982,14 @@ class Lernfabrik:
         job.set_amount_produced(amount_produced)
 
         if all_jobs_completed_for_part(part_name):
-            #  all machines required to produce a part have been operated part is created
+            #  all machines required to produce a part have been operated part are created
             increase_part_count(part_name, amount_to_produce)  # add newly created part
             print(math.floor(amount_to_produce), part_name, "(s) was created at ", self.env.now, "\n")
-
-        # simulating transport time between the machine and the finishing area
-
-        global TRANSPORT_TIME
-        if job.get_part_name() == machine_fz12:
-            # 50 seconds are needed between the mill and the Arbeitsplatz 2
-            yield self.env.timeout(50)
-            TRANSPORT_TIME += (transport_time + 50)
-        else:
-            # all other parts need the GZ200 as end machine hence can be grouped in else
-            # 70 seconds are needed between the GZ200 and Arbeitsplatz 2
-            yield self.env.timeout(70)
-            TRANSPORT_TIME += (transport_time + 70)
 
         self.done_jobs.append(job)
 
     def series_job_execution(self, jobs_in_series):
-        # called n times to execute the rest of the jobs that cannot be parallelized
+        # called n times to execute the rest of the jobs that cannot be parallelized,
         # its execution is in series
         for job in jobs_in_series:
             yield self.env.process(self.do_job(job))
@@ -1082,7 +1077,7 @@ class Lernfabrik:
         serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
     def fulfill_order_with_optimization_without_parallelization(self, order_number, order):
-        # fulfillment of orders in such a way that minimal set up time is achieved
+        # fulfillment of orders in such a way that minimal set-up time is achieved
 
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1131,7 +1126,7 @@ class Lernfabrik:
         serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
     def fulfill_with_optimization_and_parallelization(self, order_number, order):
-        # fulfillment of orders in such a way that minimal set up time is achieved
+        # fulfillment of orders in such a way that minimal set-up time is achieved
         # furthermore parallel execution of machines is done wherever possible
 
         global UNILOKK_COUNT
@@ -1197,7 +1192,7 @@ class Lernfabrik:
     def fulfill_orders(self, orders_list):
         # the whole process from part creation to order fulfillment
 
-        # receiving and prioritising orders
+        # receiving and prioritizing orders
         self.orders.receive_order(orders_list)
         prioritized_list = self.orders.order_by_priority()
 
@@ -1212,7 +1207,9 @@ class Lernfabrik:
 
         self.duration = end - start
         global ACTIVE_SIM_TIME
-        ACTIVE_SIM_TIME += self.duration
+        global INACTIVITY_TIME
+        INACTIVITY_TIME += self.total_pause_time
+        ACTIVE_SIM_TIME += (self.duration - self.total_pause_time)
 
         print("Fulfilling orders took ", self.duration, " units of time")
         self.stop_simulation = True
