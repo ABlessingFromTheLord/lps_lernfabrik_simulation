@@ -1279,20 +1279,10 @@ Finishing_Jobs = [Fertigstellung]
 SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
-# creating order and add them to order list
-# orders could also be created randomly, so random amount and random priority
-order_1 = Order(5, 2)
-order_2 = Order(20, 15)
-order_3 = Order(15, 20)
-order_4 = Order(35, 27)
-order_5 = Order(10, 3)
-order_6 = Order(15, 38)
-order_7 = Order(30, 45)
-order_8 = Order(25, 10)
-order_9 = Order(20, 55)
-order_10 = Order(25, 65)
 
-orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-env.process(fabric.fulfill_orders(orders))
-env.run()
-print_resource_statistics()
+for i in range(5, 50):
+
+    orders = [Order(i, 1)]
+    env.process(fabric.fulfill_orders(orders))
+    env.run()
+    print_resource_statistics()
