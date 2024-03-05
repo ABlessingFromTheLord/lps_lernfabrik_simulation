@@ -335,38 +335,38 @@ def sort_by_depth(jobs):
     return to_return
 
 
-def get_parts_by_sequence(sequence):
-    # returns part names in the amount their machines are needed to be executed
-    # to get a batch that can fulfill an order
+def get_parts_by_batch(batch):
+    # returns parts and the amount of each is dependant its amount in the batch
+
     to_return = []
 
-    for j in range(len(sequence)):
+    for j in range(len(batch)):
         match j:
             case 0:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Oberteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 1:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Unterteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 2:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Halteteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 3:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Ring")
-                    sequence[j] -= 1
+                    batch[j] -= 1
     return to_return
 
 
-def get_jobs_from_execution_sequence(execution_sequence):
+def get_jobs_from_batch(batch):
     # returns the jobs needed for a certain execution sequence
 
     jobs = []  # array of jobs needed to fulfill this order
 
-    for part in execution_sequence:
+    for part in batch:
         jobs_for_part = get_jobs_for_part(part)
 
         # unpacking jobs into one list full of all the jobs
@@ -671,11 +671,11 @@ def get_depth(job_list):
     return depth
 
 
-def pre_processing_order(previous_drehen_job, execution_sequence):
+def optimize(previous_drehen_job, execution_sequence):
     # returns jobs as well as their amount from the part production sequence
-    # wop stands for with optimization of set-up time and parallel execution of jobs
+    # the order the jobs are returned is the order with most minimal set up time
 
-    jobs = get_jobs_from_execution_sequence(execution_sequence)
+    jobs = get_jobs_from_batch(execution_sequence)
 
     amount_of_jobs_to_be_done = len(jobs)
 
@@ -689,22 +689,25 @@ def pre_processing_order(previous_drehen_job, execution_sequence):
     return min_setup_time_jobs_sequence, amount_of_jobs_to_be_done
 
 
-def serve_out_and_clear(order, rem_unilokk, day, time, done_jobs):
+def serve_out_and_clear(order, rem_unilokk, day, time, done_jobs, partial):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
-    if UNILOKK_COUNT >= (order.amount - rem_unilokk):
-        UNILOKK_COUNT -= (order.amount - rem_unilokk)
-        global ORDERS_FULFILLED
-        ORDERS_FULFILLED += 1
 
-        if day <= order.delivery_date:
-            global DEADLINES_MET
-            DEADLINES_MET += 1
+    if not partial:
+        if UNILOKK_COUNT >= (order.amount - rem_unilokk):
+            UNILOKK_COUNT -= (order.amount - rem_unilokk)
+            global ORDERS_FULFILLED
+            ORDERS_FULFILLED += 1
 
-        done_jobs.clear()
+            if day <= order.delivery_date:
+                global DEADLINES_MET
+                DEADLINES_MET += 1
 
-        print(f"Order fulfilled completely at {time}, in day {day} \n\n")
+            done_jobs.clear()
+
+            print(f"Order fulfilled completely at {time}, in day {day} \n\n")
     else:
+        order.amount -= (UNILOKK_COUNT + rem_unilokk)
         done_jobs.clear()
 
         print(f"Order unfulfilled at {time} in day {day} \n\n")
@@ -1052,13 +1055,14 @@ class Lernfabrik:
             parts_needed = get_parts_needed(working_order)
             print(parts_needed)
 
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
+            batch_size = amount_of_runs(parts_needed)
+            print("batch size", batch_size)
+            batch_size_in_parts = get_parts_by_batch(batch_size)
+            print("batch size by parts", batch_size_in_parts)
 
+            # further pre-processing from fulfill_without_optimization
             # getting jobs needed
-            jobs = get_jobs_from_execution_sequence(execution_sequence_in_parts)
+            jobs = get_jobs_from_batch(batch_size_in_parts)
             amount_of_jobs_to_be_done = len(jobs)
 
             jobs_sorted_by_machine = sort_jobs_by_machines(jobs)
@@ -1092,8 +1096,16 @@ class Lernfabrik:
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        # fulfilling order
-        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
+        if UNILOKK_COUNT >= order.amount:
+            # fulfilling order
+            serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs, False)
+        else:
+            # partially fulfilling order
+            serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs, True)
+
+            rest_of_order = Order(order.amount - UNILOKK_COUNT, order.delivery_date)
+
+            yield self.env.process(self.fulfill_without_optimization(order_number, rest_of_order))
 
     def fulfill_with_optimization(self, order_number, order):
         # fulfillment of orders in such a way that minimal set-up time is achieved
@@ -1115,14 +1127,15 @@ class Lernfabrik:
             parts_needed = get_parts_needed(working_order)
             print(parts_needed)
 
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
+            batch_size = amount_of_runs(parts_needed)
+            print("batch size", batch_size)
+            batch_size_in_parts = get_parts_by_batch(batch_size)
+            print("batch size by parts", batch_size_in_parts)
 
+            # further pre-processing from fulfill_with_optimization
             # getting order necessities
             min_setup_time_jobs_sequence, amount_of_jobs_to_be_done = (
-                pre_processing_order(self.previous_drehen_job, execution_sequence_in_parts))
+                optimize(self.previous_drehen_job, batch_size_in_parts))
 
             # running the jobs
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
@@ -1160,7 +1173,31 @@ class Lernfabrik:
         # fulfilling order
         serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
 
+    def benchmark_fulfill_orders(self, orders_list):
+        # to be run for the benchmark simulation
+        # the whole process from part creation to order fulfillment
+
+        # store starting time
+        start = self.env.now
+
+        for order_number in range(len(orders_list)):
+            yield self.env.process(self.fulfill_without_optimization(
+                order_number + 1, orders_list[order_number]))
+
+        end = self.env.now
+
+        self.duration = end - start
+        print(f"Fulfilling orders took {self.duration} units of time")
+        self.stop_simulation = True
+
+        global ACTIVE_SIM_TIME
+        ACTIVE_SIM_TIME += (self.duration - (self.total_break_time + (28800 * self.error_times)))
+
+        print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(orders_list))
+        print("\nDeadlines met:", DEADLINES_MET, "/", len(orders_list))
+
     def fulfill_orders(self, orders_list):
+        # to be run for the simulation with the optimization
         # the whole process from part creation to order fulfillment
 
         # receiving and prioritizing orders
@@ -1171,7 +1208,7 @@ class Lernfabrik:
         start = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_without_optimization(
+            yield self.env.process(self.fulfill_with_optimization(
                 order_number + 1, prioritized_list[order_number]))
 
         end = self.env.now
@@ -1280,6 +1317,6 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-env.process(fabric.fulfill_orders(orders))
+env.process(fabric.benchmark_fulfill_orders(orders))
 env.run()
 print_resource_statistics()
