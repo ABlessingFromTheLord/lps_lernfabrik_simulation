@@ -754,7 +754,7 @@ def print_resource_statistics():
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
-    gz200_workstation_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    gz200_workstation_util = round((MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     workstation_2_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
 
     print(f"\nSTATISTICS")
