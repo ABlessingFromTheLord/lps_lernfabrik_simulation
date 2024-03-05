@@ -673,7 +673,7 @@ def get_depth(job_list):
 
 def optimize(previous_drehen_job, execution_sequence):
     # returns jobs as well as their amount from the part production sequence
-    # the order the jobs are returned is the order with most minimal set up time
+    # the order the jobs are returned is the order with most minimal set-up time
 
     jobs = get_jobs_from_batch(execution_sequence)
 
@@ -689,28 +689,21 @@ def optimize(previous_drehen_job, execution_sequence):
     return min_setup_time_jobs_sequence, amount_of_jobs_to_be_done
 
 
-def serve_out_and_clear(order, rem_unilokk, day, time, done_jobs, partial):
+def serve_out_and_clear(order, day, time, done_jobs):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
 
-    if not partial:
-        if UNILOKK_COUNT >= (order.amount - rem_unilokk):
-            UNILOKK_COUNT -= (order.amount - rem_unilokk)
-            global ORDERS_FULFILLED
-            ORDERS_FULFILLED += 1
+    UNILOKK_COUNT -= order.amount
+    global ORDERS_FULFILLED
+    ORDERS_FULFILLED += 1
 
-            if day <= order.delivery_date:
-                global DEADLINES_MET
-                DEADLINES_MET += 1
+    if day <= order.delivery_date:
+        global DEADLINES_MET
+        DEADLINES_MET += 1
 
-            done_jobs.clear()
+    done_jobs.clear()
 
-            print(f"Order fulfilled completely at {time}, in day {day} \n\n")
-    else:
-        order.amount -= (UNILOKK_COUNT + rem_unilokk)
-        done_jobs.clear()
-
-        print(f"Order unfulfilled at {time} in day {day} \n\n")
+    print(f"Order fulfilled completely at {time}, in day {day} \n\n")
 
 
 def get_parts_needed(order):
@@ -1088,7 +1081,7 @@ class Lernfabrik:
         global UNILOKK_PRODUCED
         UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
 
-        UNILOKK_COUNT += UNILOKK_PRODUCED
+        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
@@ -1098,14 +1091,13 @@ class Lernfabrik:
 
         if UNILOKK_COUNT >= order.amount:
             # fulfilling order
-            serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs, False)
+            serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
-            # partially fulfilling order
-            serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs, True)
+            self.done_jobs.clear()
+            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
 
-            rest_of_order = Order(order.amount - UNILOKK_COUNT, order.delivery_date)
-
-            yield self.env.process(self.fulfill_without_optimization(order_number, rest_of_order))
+            # redoing order
+            yield self.env.process(self.fulfill_without_optimization(order_number, order))
 
     def fulfill_with_optimization(self, order_number, order):
         # fulfillment of orders in such a way that minimal set-up time is achieved
@@ -1162,7 +1154,7 @@ class Lernfabrik:
         global UNILOKK_PRODUCED
         UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
 
-        UNILOKK_COUNT += UNILOKK_PRODUCED
+        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
@@ -1170,8 +1162,15 @@ class Lernfabrik:
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        # fulfilling order
-        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
+        if UNILOKK_COUNT >= order.amount:
+            # fulfilling order
+            serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
+        else:
+            self.done_jobs.clear()
+            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
+
+            # redoing order
+            yield self.env.process(self.fulfill_without_optimization(order_number, order))
 
     def benchmark_fulfill_orders(self, orders_list):
         # to be run for the benchmark simulation
