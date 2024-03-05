@@ -908,11 +908,11 @@ class Lernfabrik:
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
         while self.breakdown_limit > 0:
+            yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
 
             # if true then machine breaks down, else continues running
             if break_or_not:
-                yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
                 with machine.request(priority=priority, preempt=preempt) as request:
                     yield request
 
