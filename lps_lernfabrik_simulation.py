@@ -864,7 +864,7 @@ class Lernfabrik:
             yield self.env.timeout(0)
 
     # operation
-    def operation(self, machine, operating_time):
+    def operation(self, machine, machine_codename, operating_time):
         #  simulates an operation, it is an abstract function
 
         # operating machine after equipping
@@ -889,7 +889,7 @@ class Lernfabrik:
             except simpy.Interrupt:
                 self.currently_broken = True
 
-                print(f"\nMachine{machine} broke down at {self.env.now}")
+                print(f"\n{machine_codename} broke down at {self.env.now}")
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
                 # producing random repair time in the gaussian distribution with mean 60 seconds and standard
@@ -971,7 +971,7 @@ class Lernfabrik:
 
             for i in range(0, amount_to_produce):
                 self.process = self.env.process(self.operation(
-                    required_machine, operating_time))  # operating machinery
+                    required_machine, job.get_machine_codename(), operating_time))  # operating machinery
 
                 yield self.process
 
@@ -1011,7 +1011,7 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, "N/A", 180))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count()
@@ -1242,9 +1242,9 @@ MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME = 0
 
 # instantiating jobs
 # Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa, "Jaespa")
+Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200, "GZ200")
+Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12, "FZ12")
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
 Oberteil_Saegen.set_depth(0)
@@ -1257,8 +1257,8 @@ Oberteil_Fraesen.set_depth(2)
 Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa, "Jaespa")
+Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200, "GZ200")
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
 Unterteil_Saegen.set_depth(0)
@@ -1268,8 +1268,8 @@ Unterteil_Drehen.set_depth(1)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa, "Jaespa")
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200, "GZ200")
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
 Halteteil_Saegen.set_depth(0)
@@ -1279,9 +1279,9 @@ Halteteil_Drehen.set_depth(1)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200)
+Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa, "Jaespa")
+Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200, "GZ200")
+Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200, "Arbeitsplatz_am_GZ200")
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Saegen.set_depth(0)
@@ -1294,7 +1294,8 @@ Ring_Senken.set_depth(2)
 Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken]
 
 # Finishing jobs
-Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken",
+                     "Not_Applicable", 180, machine_arbeitsplatz_2, "Arbeitsplatz_2")
 Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]

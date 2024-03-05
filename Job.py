@@ -1,12 +1,13 @@
 class Job:
     # definition of how a job made in the simulation looks like
-    def __init__(self, name, part_name, duration, machine):
+    def __init__(self, name, part_name, duration, machine, machine_codename):
         self.name = name
         self.part_name = part_name
         self.duration = duration
         self.job_before = Job
         self.job_after = Job
         self.machine_required = machine
+        self.machine_codename = machine_codename
         self.completed = 0
         self.depth = None
         self.amount_produced = 0
@@ -29,6 +30,9 @@ class Job:
 
     def get_machine_required(self):
         return self.machine_required
+
+    def get_machine_codename(self):
+        return self.machine_codename
 
     def get_completed(self):
         return self.completed
