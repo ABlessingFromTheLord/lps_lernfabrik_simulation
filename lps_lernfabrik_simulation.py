@@ -787,6 +787,7 @@ class Lernfabrik:
         self.start_of_break_1 = 7200
         self.end_of_break_1 = 0  # is set at an end of break
         self.taken_break_2 = False
+        self.shift_1_ended = False
         self.start_of_break_2 = 19800
         self.end_of_break_2 = 19830 * self.day
         self.start_of_shift_1 = 1
@@ -800,7 +801,7 @@ class Lernfabrik:
         self.done_jobs = []
         self.breakdown_limit = 0
         self.stop_simulation = False
-        self.idling = 0
+        self.env.process(self.time_management_2())
 
     def time_management(self):
         # checks the time and day in which we are
@@ -863,6 +864,58 @@ class Lernfabrik:
             # pass over and continue working since no event is relevant at this time
             yield self.env.timeout(0)
 
+    def taking_a_break(self, break_time):
+        for machine in factory_machines:
+            with machine.request(priority=0, preempt=False) as request:
+                yield request
+            print(f"Break time started at {self.env.now}, for shift {self.shift_number} of day {self.day}, {machine} duration: {break_time}")
+            yield self.env.timeout(break_time)
+            print(f"Break time ended at {self.env.now}")
+
+    def time_management_2(self):
+        while not self.stop_simulation:
+            if self.env.now == 0:
+                yield self.env.timeout(1)
+
+            elif self.env.now % 7200 == 0 and not self.taken_break_1:
+                yield self.env.process(self.taking_a_break(15))
+                self.taken_break_1 = True
+
+            elif self.env.now % 19800 == 0 and not self.taken_break_2:
+                yield self.env.process(self.taking_a_break(30))
+                self.taken_break_2 = True
+
+            elif self.env.now % 28800 == 0 and not self.shift_1_ended:
+                self.shift_number = 2
+                print(f"SCHÖNES Feierabend to shift {self.shift_number} of day {self.day} at {self.env.now} ")
+                print(f"Shift {self.shift_number} of day {self.day} starting...")
+                yield self.env.timeout(1)
+                self.shift_1_ended = True
+                self.shift_number = 2
+                self.taken_break_1 = False
+                self.taken_break_2 = False
+
+            elif self.env.now % 36000 == 0 and not self.taken_break_1:
+                yield self.env.process(self.taking_a_break(30))
+                self.taken_break_1 = True
+
+            elif self.env.now % 48600 == 0 and not self.taken_break_2:
+                yield self.env.process(self.taking_a_break(15))
+                self.taken_break_2 = True
+
+            elif self.env.now % 57600 == 0:
+                print(f"SCHÖNES Feierabend for day {self.day}")
+                yield self.env.timeout(28800)
+                self.day += 1
+                self.shift_number = 1
+                self.taken_break_1 = False
+                self.taken_break_2 = False
+                self.shift_1_ended = False
+                print(f"Shift {self.shift_number} of day {self.day} starting...")
+
+            else:
+                yield self.env.timeout(1)
+
     # operation
     def operation(self, machine, machine_codename, operating_time):
         #  simulates an operation, it is an abstract function
@@ -884,7 +937,7 @@ class Lernfabrik:
 
                 operating_time = 0
 
-                yield self.env.process(self.time_management())
+                #yield self.env.process(self.time_management())
 
             except simpy.Interrupt:
                 self.currently_broken = True
@@ -945,8 +998,8 @@ class Lernfabrik:
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
-            print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
-                  " to ", job.get_name(), " is ", equipping_time)
+            print(f"Ruestungszeit from {self.previous_drehen_job.get_name()} to {job.get_name()}is {equipping_time} "
+                  f", from {self.env.now} to {self.env.now + equipping_time}")
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
@@ -954,7 +1007,7 @@ class Lernfabrik:
         if required_machine == machine_gz200:
             self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
 
-        with required_machine.request(priority=1, preempt=False) as request:
+        with required_machine.request(priority=2, preempt=True) as request:
             yield request
 
             print("\nTransport time for ", job.get_name(), "is", transport_time)
@@ -964,7 +1017,7 @@ class Lernfabrik:
             # setting limit
             self.breakdown_limit = ((1 - (get_mz(required_machine))) * 100)
 
-            self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
+            self.env.process(self.break_machine(required_machine, 3, True))  # starting breakdown function
 
             print(f"{job.get_name()} of {amount_to_produce} parts will take {operating_time * amount_to_produce} "
                   f"seconds, started execution at {self.env.now}")
@@ -1073,7 +1126,6 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
-                    self.idling += 1
 
         yield self.env.process(self.finish_unilokk_creation())
 
@@ -1143,7 +1195,6 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
-                    self.idling += 1
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
@@ -1232,6 +1283,7 @@ machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
 machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
+factory_machines = [machine_jaespa, machine_gz200, machine_fz12, machine_arbeitsplatz_at_gz200, machine_arbeitsplatz_2]
 
 # resource statistics
 MACHINE_JAESPA_ACTIVE_TIME = 0
