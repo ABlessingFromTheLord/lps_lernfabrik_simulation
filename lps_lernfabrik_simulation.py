@@ -1015,7 +1015,7 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, "N/A", 180))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, "N/A", 785))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count()
@@ -1062,21 +1062,8 @@ class Lernfabrik:
             jobs = get_jobs_from_batch(batch_size_in_parts)
             amount_of_jobs_to_be_done = len(jobs)
 
-            jobs_sorted_by_machine = sort_jobs_by_machines(jobs)
-
-            while len(self.done_jobs) < amount_of_jobs_to_be_done:
-                to_do = []
-
-                # get jobs that can be run in parallel
-                to_do.extend(get_parallel_runnable_jobs(jobs_sorted_by_machine))
-
-                if len(to_do) > 0:
-                    # do the jobs in parallel
-                    yield self.env.process(self.parallel_job_execution(to_do))
-
-                else:
-                    # no jobs were found, move simulation forward
-                    yield self.env.timeout(1)
+            for job in jobs:
+                yield self.env.process(self.do_job(job))
 
         yield self.env.process(self.finish_unilokk_creation())
 
@@ -1318,6 +1305,6 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
-env.process(fabric.fulfill_orders(orders))
+env.process(fabric.benchmark_fulfill_orders([Order(200, 69)]))
 env.run()
 print_resource_statistics()
