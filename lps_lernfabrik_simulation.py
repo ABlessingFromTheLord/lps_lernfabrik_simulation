@@ -1302,7 +1302,6 @@ Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
-SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
