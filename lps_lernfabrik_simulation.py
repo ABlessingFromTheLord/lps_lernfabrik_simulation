@@ -1172,7 +1172,7 @@ class Lernfabrik:
             print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
 
             # redoing order
-            yield self.env.process(self.fulfill_without_optimization(order_number, order))
+            yield self.env.process(self.fulfill_with_optimization(order_number, order))
 
     def benchmark_fulfill_orders(self, orders_list):
         # to be run for the benchmark simulation
