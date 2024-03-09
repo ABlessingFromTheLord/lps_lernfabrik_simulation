@@ -3,8 +3,8 @@ from Order import Order
 
 class OrderList:
     # this is how orders are submitted
-    # first you receive the orders by calling receive_orders, since object is instantiated with None
-    # then generate prioritized list by calling get_order_by_priority
+    # first you receive the orders by calling receive_orders, since an object is instantiated with None
+    # then generate a prioritized list by calling get_order_by_priority
     def __init__(self):
         self.list = None
 

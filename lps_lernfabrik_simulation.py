@@ -40,14 +40,20 @@ RING_COUNT = 0
 ORDERS_FULFILLED = 0
 DEADLINES_MET = 0
 
-# ruestungszeit
+# set up, repair and transport time
 RUESTUNGS_ZEIT = 0
+REPAIR_TIME = 0
+TRANSPORT_TIME = 0
 
 # unilokk just produced
 UNILOKK_PRODUCED = 0
 
 # unilokk created
 UNILOKK_COUNT = 0
+
+# optimum batch
+# index coding: 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
+OPTIMUM_BATCH = [0, 0, 0, 0]
 
 # simulation time stats
 ACTIVE_SIM_TIME = 0
@@ -299,6 +305,11 @@ def amount_of_runs(order_list):
                         order_list[order_instance] -= RING_COUNT
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
 
+    # adding to get the optimal batch
+    global OPTIMUM_BATCH
+    for i in range(len(OPTIMUM_BATCH)):
+        OPTIMUM_BATCH[i] += order_list[i]
+
     return order_list
 
 
@@ -324,38 +335,38 @@ def sort_by_depth(jobs):
     return to_return
 
 
-def get_parts_by_sequence(sequence):
-    # returns part names in the amount their machines are needed to be executed
-    # to get a batch that can fulfill an order
+def get_parts_by_batch(batch):
+    # returns parts and the amount of each is dependant its amount in the batch
+
     to_return = []
 
-    for j in range(len(sequence)):
+    for j in range(len(batch)):
         match j:
             case 0:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Oberteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 1:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Unterteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 2:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Halteteil")
-                    sequence[j] -= 1
+                    batch[j] -= 1
             case 3:
-                while sequence[j] > 0:
+                while batch[j] > 0:
                     to_return.append("Ring")
-                    sequence[j] -= 1
+                    batch[j] -= 1
     return to_return
 
 
-def get_jobs_from_execution_sequence(execution_sequence):
+def get_jobs_from_batch(batch):
     # returns the jobs needed for a certain execution sequence
 
     jobs = []  # array of jobs needed to fulfill this order
 
-    for part in execution_sequence:
+    for part in batch:
         jobs_for_part = get_jobs_for_part(part)
 
         # unpacking jobs into one list full of all the jobs
@@ -660,24 +671,11 @@ def get_depth(job_list):
     return depth
 
 
-def pre_processing_order_wo(jobs, previous_drehen_job):
-    # returns jobs sported in the order of minimal set-up time
-
-    # ordering the drehjobs in the order of minimal Ruestungszeit
-    drehen_jobs = [x for x in jobs if x.get_machine_required() == machine_gz200]
-    drehen_jobs = sort_drehjobs_by_minimal_runtime(previous_drehen_job, drehen_jobs)
-    min_run = get_min_run(drehen_jobs)
-
-    sorted_jobs = get_jobs_by_min_set_up_sequence(min_run, jobs)
-
-    return sorted_jobs
-
-
-def pre_processing_order_wop(previous_drehen_job, execution_sequence):
+def optimize(previous_drehen_job, execution_sequence):
     # returns jobs as well as their amount from the part production sequence
-    # wop stands for with optimization of set-up time and parallel execution of jobs
+    # the order the jobs are returned is the order with most minimal set-up time
 
-    jobs = get_jobs_from_execution_sequence(execution_sequence)
+    jobs = get_jobs_from_batch(execution_sequence)
 
     amount_of_jobs_to_be_done = len(jobs)
 
@@ -691,25 +689,21 @@ def pre_processing_order_wop(previous_drehen_job, execution_sequence):
     return min_setup_time_jobs_sequence, amount_of_jobs_to_be_done
 
 
-def serve_out_and_clear(order, rem_unilokk, day, time, done_jobs):
+def serve_out_and_clear(order, day, time, done_jobs):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
-    if UNILOKK_COUNT >= (order.amount - rem_unilokk):
-        UNILOKK_COUNT -= (order.amount - rem_unilokk)
-        global ORDERS_FULFILLED
-        ORDERS_FULFILLED += 1
 
-        if day <= order.delivery_date:
-            global DEADLINES_MET
-            DEADLINES_MET += 1
+    UNILOKK_COUNT -= order.amount
+    global ORDERS_FULFILLED
+    ORDERS_FULFILLED += 1
 
-        done_jobs.clear()
+    if day <= order.delivery_date:
+        global DEADLINES_MET
+        DEADLINES_MET += 1
 
-        print(f"Order fulfilled completely at {time}, in day {day} \n\n")
-    else:
-        done_jobs.clear()
+    done_jobs.clear()
 
-        print(f"Order unfulfilled at {time} in day {day} \n\n")
+    print(f"Order fulfilled completely at {time}, in day {day} \n\n")
 
 
 def get_parts_needed(order):
@@ -754,15 +748,21 @@ def update_statistics(duration, machine):
 def print_resource_statistics():
     # prints out statistics at the end of the simulation to compare how a resource was used
     # in comparison to the active simulation time
+    setup = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
+    repair = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    transport = round((TRANSPORT_TIME / ACTIVE_SIM_TIME) * 100, 2)
     jaespa_util = round((MACHINE_JAESPA_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     gz200_util = round((MACHINE_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     fz12_util = round((MACHINE_FZ12_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
-    gz200_workstation_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
+    gz200_workstation_util = round((MACHINE_ARBEITSPLATZ_AT_GZ200_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
     workstation_2_util = round((MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME / ACTIVE_SIM_TIME) * 100, 2)
 
     print(f"\nSTATISTICS")
-    print(f"Active simulation time: {ACTIVE_SIM_TIME}")
-    print(f"Set up time: {RUESTUNGS_ZEIT}")
+    print(f"Active simulation time: {ACTIVE_SIM_TIME}\n")
+    print(f"Optimum batch: {OPTIMUM_BATCH}")
+    print(f"Set up time: {RUESTUNGS_ZEIT} or {setup}%")
+    print(f"Transport time: {TRANSPORT_TIME} or {transport}%")
+    print(f"Repair time: {REPAIR_TIME} or {repair}%")
     print(f"\nJaespa utilization: {jaespa_util}%")
     print(f"GZ200 utilization: {gz200_util}%")
     print(f"FZ12 utilization: {fz12_util}%")
@@ -778,101 +778,112 @@ class Lernfabrik:
         self.env = sim_env  # environment variable
         self.start_time = None
         self.duration = None
+        self.error_times = 0
         self.shift_number = 1
         self.day = 1  # to keep track of day
-        self.last_day = 0
+        self.day_ended = False
         self.total_break_time = 0
-        self.taken_break_1 = False
-        self.start_of_break_1 = 7200
-        self.end_of_break_1 = 0  # is set at an end of break
-        self.taken_break_2 = False
-        self.start_of_break_2 = 19800
-        self.end_of_break_2 = 19830 * self.day
-        self.start_of_shift_1 = 1
+        self.start_of_shift_1_break = 14400
+        self.end_of_shift_1_break = 14445  # will be corrected dynamically
+        self.taken_shift_1_break = False
+        self.start_of_shift_2_break = 43200
+        self.end_of_shift_2_break = 43245  # will be corrected dynamically
+        self.taken_shift_2_break = False
+        self.start_of_shift_1 = 0
         self.start_of_shift_2 = 50400
-        self.end_of_shift_1 = 50400
-        self.end_of_shift_2 = 79200 * self.day
-        self.overtime_allowed = 3600 * self.day
+        self.end_of_shift_1 = 28800
+        self.end_of_shift_2 = 57600
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
+        self.breakdown_limit = 0
         self.stop_simulation = False
 
     def time_management(self):
         # checks the time and day in which we are
 
-        if self.start_of_break_1 <= self.env.now < self.start_of_break_2 and not self.taken_break_1:
+        if self.start_of_shift_1_break <= self.env.now < self.end_of_shift_1 and not self.taken_shift_1_break and self.shift_number == 1:
             # taking first break of shift
-            print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
-            yield self.env.timeout(15)
-            self.total_break_time += 15
+            print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            self.taken_shift_1_break = True
+            yield self.env.timeout(45)
+            self.total_break_time += 45
+            self.end_of_shift_1_break = self.env.now  # correction if break was not taken on time
             print(f"Break ends at {self.env.now}\n")
 
-            self.taken_break_1 = True
-            self.start_of_break_2 = self.env.now + 10815
-
-        elif self.start_of_break_2 <= self.env.now < self.end_of_shift_1 and not self.taken_break_2:
-            # taking second break of shift
-            print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
-            yield self.env.timeout(30)
-            self.total_break_time += 30
+        elif self.start_of_shift_2_break <= self.env.now < self.end_of_shift_2 and not self.taken_shift_2_break and self.shift_number == 2:
+            # taking first break of shift
+            print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            self.taken_shift_2_break = True
+            yield self.env.timeout(45)
+            self.total_break_time += 45
+            self.end_of_shift_2_break = self.env.now  # correction if break was not taken on time
             print(f"Break ends at {self.env.now}\n")
 
-            self.taken_break_2 = True
-            self.end_of_break_2 = self.env.now
-
-        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_1 and self.shift_number == 1:
+        elif self.end_of_shift_1 <= self.env.now < self.env.now + 300 and self.shift_number == 1:
             # ending shift 1
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}")
             self.shift_number = 2
+
+            overtime = (self.env.now - self.start_of_shift_1) - 28800
+            shift_duration = 28800
+
+            if overtime > 0:
+                print(f"Overtime is {overtime}")
+                self.start_of_shift_2_break = self.env.now + ((4 * 3600) - overtime)
+                shift_duration -= overtime
+
+            self.end_of_shift_2 = self.env.now + shift_duration
             print(f"Second shift starts at {self.env.now}\n")
 
-            self.taken_break_1 = False
-            self.taken_break_2 = False
-            self.start_of_break_1 = self.env.now + 7200
-            self.start_of_break_2 = self.env.now + 19800
-            self.end_of_break_2 = self.env.now + 19830
-            self.end_of_shift_2 = self.env.now + 79200
-
-        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_2 and self.shift_number == 2:
+        elif self.end_of_shift_2 <= self.env.now < self.env.now + 300 and self.shift_number == 2 and not self.day_ended:
             # ending shift 2 and day
-            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
-            yield self.env.timeout(28800)
-            self.total_break_time += 28800
-
             # resetting variables for the next day
-            self.shift_number = 1
-            self.taken_break_1 = False
-            self.taken_break_2 = False
-            self.last_day = self.day
+            self.day_ended = True
+            overtime = self.env.now - self.end_of_shift_2
+
+            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to day {self.day}\n")
+            yield self.env.timeout(28800)
             self.day += 1  # a new day starts
+            self.shift_number = 1
+            print(f"\nShift {self.shift_number} of day {self.day} starts at {self.env.now}")
             self.start_of_shift_1 = self.env.now
-            self.end_of_shift_1 = self.env.now + 50400
-            self.start_of_break_1 = self.env.now + 7200
-            self.end_of_break_1 = self.env.now + 7215
-            self.start_of_break_2 = self.env.now + 19800
-            self.end_of_break_2 = self.env.now + 19830
-            self.end_of_shift_2 = self.env.now + 79200
-            print(f"\nShift {self.shift_number} of day {self.day} starts at {self.start_of_shift_1}")
+            shift_duration = 28800
+
+            if overtime > 0:
+                print(f"Overtime is {overtime}")
+                shift_duration -= overtime
+
+            self.end_of_shift_1 = self.env.now + shift_duration
+            self.start_of_shift_1_break = self.env.now + 14400
+            self.start_of_shift_2_break = self.env.now + 43200
+            self.end_of_shift_2 = self.env.now + 57600
+            self.taken_shift_1_break = False
+            self.taken_shift_2_break = False
+            self.day_ended = False
 
         else:
             # pass over and continue working since no event is relevant at this time
-            yield self.env.timeout(0)
+            yield self.env.timeout(1)
 
     # operation
-    def operation(self, machine, operating_time):
+    def operation(self, machine, machine_codename, operating_time):
         #  simulates an operation, it is an abstract function
 
         # operating machine after equipping
         while operating_time:
             start = self.env.now
+            start_day = self.day
 
             try:
                 yield self.env.timeout(operating_time)  # running operation
 
                 self.process = None
+                end_day = self.day
 
+                if start_day != end_day:
+                    self.error_times += 1
                 update_statistics(operating_time, machine)
 
                 operating_time = 0
@@ -882,13 +893,15 @@ class Lernfabrik:
             except simpy.Interrupt:
                 self.currently_broken = True
 
-                print(f"\nMachine{machine} broke down at {self.env.now}")
+                print(f"\n{machine_codename} broke down at {self.env.now}")
                 operating_time -= (self.env.now - start)  # remaining time from when breakdown occurred
 
                 # producing random repair time in the gaussian distribution with mean 60 seconds and standard
                 # deviation of 30 seconds
                 repair_time = abs(numpy.floor(numpy.random.normal(60, 30, 1).item()).astype(int).item())
                 yield self.env.timeout(repair_time)
+                global REPAIR_TIME
+                REPAIR_TIME += repair_time
 
                 print(f"Machine repairs took {repair_time} seconds, remaining time for operation {operating_time} "
                       f"seconds, continues at {self.env.now}\n")
@@ -898,19 +911,21 @@ class Lernfabrik:
     # Helper functions
     def break_machine(self, machine, priority, preempt):
         #  breaks down a certain machine based on it's break probability or Maschinenzuverlässigkeit
-        while not self.stop_simulation:
+        while self.breakdown_limit > 0:
             yield self.env.timeout(MTTR)  # Time between two successive machine breakdowns
             break_or_not = numpy.around(numpy.random.uniform(0, 1), 2) < (1 - get_mz(machine))
 
             # if true then machine breaks down, else continues running
             if break_or_not:
                 with machine.request(priority=priority, preempt=preempt) as request:
-                    assert isinstance(self.env.now, int), type(self.env.now)
                     yield request
-                    assert isinstance(self.env.now, int), type(self.env.now)
 
                     if self.process is not None and not self.currently_broken:
                         self.process.interrupt()
+                        self.breakdown_limit -= 1
+
+            if self.stop_simulation:
+                break
 
     def do_job(self, job):
         # performs a certain job as subprocess in a part creation process
@@ -918,6 +933,8 @@ class Lernfabrik:
         part_name = job.get_part_name()
         required_machine = job.get_machine_required()
         transport_time = get_transport_time_between_machines(job.get_part_name(), required_machine)
+        global TRANSPORT_TIME
+        TRANSPORT_TIME += transport_time
 
         # getting amount to be produced by job
         if job.get_depth() == 0:
@@ -948,6 +965,9 @@ class Lernfabrik:
             yield self.env.timeout(transport_time)
             yield self.env.timeout(equipping_time)
 
+            # setting limit
+            self.breakdown_limit = ((1 - (get_mz(required_machine))) * 100)
+
             self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
 
             print(f"{job.get_name()} of {amount_to_produce} parts will take {operating_time * amount_to_produce} "
@@ -955,7 +975,7 @@ class Lernfabrik:
 
             for i in range(0, amount_to_produce):
                 self.process = self.env.process(self.operation(
-                    required_machine, operating_time))  # operating machinery
+                    required_machine, job.get_machine_codename(), operating_time))  # operating machinery
 
                 yield self.process
 
@@ -995,7 +1015,7 @@ class Lernfabrik:
         # then assemble them into Unilokk
         while True:
             if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
-                yield self.env.process(self.operation(machine_arbeitsplatz_2, 180))
+                yield self.env.process(self.operation(machine_arbeitsplatz_2, "N/A", 180))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count()
@@ -1006,6 +1026,8 @@ class Lernfabrik:
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
+                global TRANSPORT_TIME
+                TRANSPORT_TIME += 20
 
                 print("unilokk ", n, " was created at ", self.env.now, "\n")
                 n = n + 1
@@ -1013,7 +1035,7 @@ class Lernfabrik:
             else:
                 break
 
-    def fulfill_orders_without_optimization_and_parallelization(self, order_number, order):
+    def fulfill_without_optimization(self, order_number, order):
         # fulfillment of orders linearly without any optimization model or parallel
         # execution of machines
 
@@ -1030,18 +1052,31 @@ class Lernfabrik:
             parts_needed = get_parts_needed(working_order)
             print(parts_needed)
 
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
-            # okay till here
+            batch_size = amount_of_runs(parts_needed)
+            print("batch size", batch_size)
+            batch_size_in_parts = get_parts_by_batch(batch_size)
+            print("batch size by parts", batch_size_in_parts)
 
+            # further pre-processing from fulfill_without_optimization
             # getting jobs needed
-            jobs = get_jobs_from_execution_sequence(execution_sequence_in_parts)
+            jobs = get_jobs_from_batch(batch_size_in_parts)
+            amount_of_jobs_to_be_done = len(jobs)
 
-            # order or jobs for minimal Ruestungszeiten
-            for job in jobs:
-                yield self.env.process(self.do_job(job))
+            jobs_sorted_by_machine = sort_jobs_by_machines(jobs)
+
+            while len(self.done_jobs) < amount_of_jobs_to_be_done:
+                to_do = []
+
+                # get jobs that can be run in parallel
+                to_do.extend(get_parallel_runnable_jobs(jobs_sorted_by_machine))
+
+                if len(to_do) > 0:
+                    # do the jobs in parallel
+                    yield self.env.process(self.parallel_job_execution(to_do))
+
+                else:
+                    # no jobs were found, move simulation forward
+                    yield self.env.timeout(1)
 
         yield self.env.process(self.finish_unilokk_creation())
 
@@ -1049,7 +1084,7 @@ class Lernfabrik:
         global UNILOKK_PRODUCED
         UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
 
-        UNILOKK_COUNT += UNILOKK_PRODUCED
+        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
@@ -1057,59 +1092,17 @@ class Lernfabrik:
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        # fulfilling order
-        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
+        if UNILOKK_COUNT >= order.amount:
+            # fulfilling order
+            serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
+        else:
+            self.done_jobs.clear()
+            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
 
-    def fulfill_order_with_optimization_without_parallelization(self, order_number, order):
-        # fulfillment of orders in such a way that minimal set-up time is achieved
+            # redoing order
+            yield self.env.process(self.fulfill_without_optimization(order_number, order))
 
-        global UNILOKK_COUNT
-        remaining_unilokk = UNILOKK_COUNT
-        UNILOKK_COUNT = 0
-
-        # need to produce if our order exceeds what is available
-        if order.amount > remaining_unilokk:
-            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
-
-            print("leftover Unilokk ", remaining_unilokk)
-
-            parts_needed = get_parts_needed(working_order)
-            print(parts_needed)
-
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
-            # okay till here
-
-            # getting jobs needed
-            jobs = get_jobs_from_execution_sequence(execution_sequence_in_parts)
-
-            # pre-processing for optimization without parallel execution
-            jobs = pre_processing_order_wo(jobs, self.previous_drehen_job)
-
-            # order or jobs for minimal Ruestungszeiten
-            for job in jobs:
-                yield self.env.process(self.do_job(job))
-
-        yield self.env.process(self.finish_unilokk_creation())
-
-        # increase based on what is produced minus damaged
-        global UNILOKK_PRODUCED
-        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
-
-        UNILOKK_COUNT += UNILOKK_PRODUCED
-
-        # reset the unilokk produced counter
-        UNILOKK_PRODUCED = 0
-
-        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
-              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
-
-        # fulfilling order
-        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
-
-    def fulfill_with_optimization_and_parallelization(self, order_number, order):
+    def fulfill_with_optimization(self, order_number, order):
         # fulfillment of orders in such a way that minimal set-up time is achieved
         # furthermore parallel execution of machines is done wherever possible
 
@@ -1129,14 +1122,15 @@ class Lernfabrik:
             parts_needed = get_parts_needed(working_order)
             print(parts_needed)
 
-            execution_sequence = amount_of_runs(parts_needed)
-            print("execution sequence", execution_sequence)
-            execution_sequence_in_parts = get_parts_by_sequence(execution_sequence)
-            print("execution sequence by parts", execution_sequence_in_parts)
+            batch_size = amount_of_runs(parts_needed)
+            print("batch size", batch_size)
+            batch_size_in_parts = get_parts_by_batch(batch_size)
+            print("batch size by parts", batch_size_in_parts)
 
+            # further pre-processing from fulfill_with_optimization
             # getting order necessities
             min_setup_time_jobs_sequence, amount_of_jobs_to_be_done = (
-                pre_processing_order_wop(self.previous_drehen_job, execution_sequence_in_parts))
+                optimize(self.previous_drehen_job, batch_size_in_parts))
 
             # running the jobs
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
@@ -1162,7 +1156,7 @@ class Lernfabrik:
         global UNILOKK_PRODUCED
         UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
 
-        UNILOKK_COUNT += UNILOKK_PRODUCED
+        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
@@ -1170,10 +1164,41 @@ class Lernfabrik:
         print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        # fulfilling order
-        serve_out_and_clear(order, remaining_unilokk, self.day, self.env.now, self.done_jobs)
+        if UNILOKK_COUNT >= order.amount:
+            # fulfilling order
+            serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
+        else:
+            self.done_jobs.clear()
+            print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
+
+            # redoing order
+            yield self.env.process(self.fulfill_without_optimization(order_number, order))
+
+    def benchmark_fulfill_orders(self, orders_list):
+        # to be run for the benchmark simulation
+        # the whole process from part creation to order fulfillment
+
+        # store starting time
+        start = self.env.now
+
+        for order_number in range(len(orders_list)):
+            yield self.env.process(self.fulfill_without_optimization(
+                order_number + 1, orders_list[order_number]))
+
+        end = self.env.now
+
+        self.duration = end - start
+        print(f"Fulfilling orders took {self.duration} units of time")
+        self.stop_simulation = True
+
+        global ACTIVE_SIM_TIME
+        ACTIVE_SIM_TIME += (self.duration - (self.total_break_time + (28800 * self.error_times)))
+
+        print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(orders_list))
+        print("\nDeadlines met:", DEADLINES_MET, "/", len(orders_list))
 
     def fulfill_orders(self, orders_list):
+        # to be run for the simulation with the optimization
         # the whole process from part creation to order fulfillment
 
         # receiving and prioritizing orders
@@ -1184,17 +1209,17 @@ class Lernfabrik:
         start = self.env.now
 
         for order_number in range(len(prioritized_list)):
-            yield self.env.process(self.fulfill_with_optimization_and_parallelization(
+            yield self.env.process(self.fulfill_with_optimization(
                 order_number + 1, prioritized_list[order_number]))
 
         end = self.env.now
 
         self.duration = end - start
-        global ACTIVE_SIM_TIME
-        ACTIVE_SIM_TIME += (self.duration - self.total_break_time)
-
-        print("Fulfilling orders took ", self.duration, " units of time")
+        print(f"Fulfilling orders took {self.duration} units of time")
         self.stop_simulation = True
+
+        global ACTIVE_SIM_TIME
+        ACTIVE_SIM_TIME += (self.duration - (self.total_break_time + (28800 * self.error_times)))
 
         print("\nOrders fulfilled:", ORDERS_FULFILLED, "/", len(prioritized_list))
         print("\nDeadlines met:", DEADLINES_MET, "/", len(prioritized_list))
@@ -1219,9 +1244,9 @@ MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME = 0
 
 # instantiating jobs
 # Oberteil creation jobs
-Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa)
-Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200)
-Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12)
+Oberteil_Saegen = Job("Oberteil_Saegen", "Oberteil", 34, machine_jaespa, "Jaespa")
+Oberteil_Drehen = Job("Oberteil_Drehen", "Oberteil", 287, machine_gz200, "GZ200")
+Oberteil_Fraesen = Job("Oberteil_Fraesen", "Oberteil", 376, machine_fz12, "FZ12")
 Oberteil_Saegen.set_job_before(None)
 Oberteil_Saegen.set_job_after(Oberteil_Drehen)
 Oberteil_Saegen.set_depth(0)
@@ -1234,8 +1259,8 @@ Oberteil_Fraesen.set_depth(2)
 Oberteil_Jobs = [Oberteil_Saegen, Oberteil_Drehen, Oberteil_Fraesen]
 
 # Unterteil creation jobs
-Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa)
-Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200)
+Unterteil_Saegen = Job("Unterteil_Saegen", "Unterteil", 20, machine_jaespa, "Jaespa")
+Unterteil_Drehen = Job("Unterteil_Drehen", "Unterteil", 247, machine_gz200, "GZ200")
 Unterteil_Saegen.set_job_before(None)
 Unterteil_Saegen.set_job_after(Unterteil_Drehen)
 Unterteil_Saegen.set_depth(0)
@@ -1245,8 +1270,8 @@ Unterteil_Drehen.set_depth(1)
 Unterteil_Jobs = [Unterteil_Saegen, Unterteil_Drehen]
 
 # Halteteil creation jobs
-Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa)
-Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200)
+Halteteil_Saegen = Job("Halteteil_Saegen", "Halteteil", 4, machine_jaespa, "Jaespa")
+Halteteil_Drehen = Job("Halteteil_Drehen", "Halteteil", 255, machine_gz200, "GZ200")
 Halteteil_Saegen.set_job_before(None)
 Halteteil_Saegen.set_job_after(Halteteil_Drehen)
 Halteteil_Saegen.set_depth(0)
@@ -1256,9 +1281,9 @@ Halteteil_Drehen.set_depth(1)
 Halteteil_Jobs = [Halteteil_Saegen, Halteteil_Drehen]
 
 # Ring creation jobs
-Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa)
-Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200)
-Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200)
+Ring_Saegen = Job("Ring_Saegen", "Ring", 3, machine_jaespa, "Jaespa")
+Ring_Drehen = Job("Ring_Drehen", "Ring", 185, machine_gz200, "GZ200")
+Ring_Senken = Job("Ring_Senken", "Ring", 20, machine_arbeitsplatz_at_gz200, "Arbeitsplatz_am_GZ200")
 Ring_Saegen.set_job_before(None)
 Ring_Saegen.set_job_after(Ring_Drehen)
 Ring_Saegen.set_depth(0)
@@ -1271,12 +1296,12 @@ Ring_Senken.set_depth(2)
 Ring_Jobs = [Ring_Saegen, Ring_Drehen, Ring_Senken]
 
 # Finishing jobs
-Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken", "Not_Applicable", 180, machine_arbeitsplatz_2)
+Fertigstellung = Job("Kleben_Montage_Pruefen_Verpacken",
+                     "Not_Applicable", 180, machine_arbeitsplatz_2, "Arbeitsplatz_2")
 Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
-SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
