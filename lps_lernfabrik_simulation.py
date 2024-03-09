@@ -800,7 +800,6 @@ class Lernfabrik:
         self.done_jobs = []
         self.breakdown_limit = 0
         self.stop_simulation = False
-        self.idling = 0
 
     def time_management(self):
         # checks the time and day in which we are
@@ -1073,7 +1072,6 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
-                    self.idling += 1
 
         yield self.env.process(self.finish_unilokk_creation())
 
@@ -1143,7 +1141,6 @@ class Lernfabrik:
                 else:
                     # no jobs were found, move simulation forward
                     yield self.env.timeout(1)
-                    self.idling += 1
 
         # else we already have enough to fulfill order, or we have produced enough
         # assembling parts
