@@ -781,140 +781,91 @@ class Lernfabrik:
         self.error_times = 0
         self.shift_number = 1
         self.day = 1  # to keep track of day
-        self.last_day = 0
+        self.day_ended = False
         self.total_break_time = 0
-        self.taken_break_1 = False
-        self.start_of_break_1 = 7200
-        self.end_of_break_1 = 0  # is set at an end of break
-        self.taken_break_2 = False
-        self.shift_1_ended = False
-        self.start_of_break_2 = 19800
-        self.end_of_break_2 = 19830 * self.day
-        self.start_of_shift_1 = 1
+        self.start_of_shift_1_break = 14400
+        self.end_of_shift_1_break = 14445  # will be corrected dynamically
+        self.taken_shift_1_break = False
+        self.start_of_shift_2_break = 43200
+        self.end_of_shift_2_break = 43245  # will be corrected dynamically
+        self.taken_shift_2_break = False
+        self.start_of_shift_1 = 0
         self.start_of_shift_2 = 50400
-        self.end_of_shift_1 = 50400
-        self.end_of_shift_2 = 79200 * self.day
-        self.overtime_allowed = 3600 * self.day
+        self.end_of_shift_1 = 28800
+        self.end_of_shift_2 = 57600
         self.currently_broken = False  # boolean for denoting when a machine is broken
         self.previous_drehen_job = None
         self.orders = OrderList()  # custom data type to receive orders, initially Null
         self.done_jobs = []
         self.breakdown_limit = 0
         self.stop_simulation = False
-        self.env.process(self.time_management_2())
 
     def time_management(self):
         # checks the time and day in which we are
 
-        if self.start_of_break_1 <= self.env.now < self.start_of_break_2 and not self.taken_break_1:
+        if self.start_of_shift_1_break <= self.env.now < self.end_of_shift_1 and not self.taken_shift_1_break and self.shift_number == 1:
             # taking first break of shift
-            print(f"\nPause 1 at {self.env.now} for shift {self.shift_number} of day {self.day}")
-            yield self.env.timeout(15)
-            self.total_break_time += 15
+            print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            self.taken_shift_1_break = True
+            yield self.env.timeout(45)
+            self.total_break_time += 45
+            self.end_of_shift_1_break = self.env.now  # correction if break was not taken on time
             print(f"Break ends at {self.env.now}\n")
 
-            self.taken_break_1 = True
-            self.start_of_break_2 = self.env.now + 10815
-
-        elif self.start_of_break_2 <= self.env.now < self.end_of_shift_1 and not self.taken_break_2:
-            # taking second break of shift
-            print(f"\nPause 2 at {self.env.now} for shift {self.shift_number} of day {self.day}")
-            yield self.env.timeout(30)
-            self.total_break_time += 30
+        elif self.start_of_shift_2_break <= self.env.now < self.end_of_shift_2 and not self.taken_shift_2_break and self.shift_number == 2:
+            # taking first break of shift
+            print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
+            self.taken_shift_2_break = True
+            yield self.env.timeout(45)
+            self.total_break_time += 45
+            self.end_of_shift_2_break = self.env.now  # correction if break was not taken on time
             print(f"Break ends at {self.env.now}\n")
 
-            self.taken_break_2 = True
-            self.end_of_break_2 = self.env.now
-
-        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_1 and self.shift_number == 1:
+        elif self.end_of_shift_1 <= self.env.now < self.env.now + 300 and self.shift_number == 1:
             # ending shift 1
             print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}")
             self.shift_number = 2
+
+            overtime = (self.env.now - self.start_of_shift_1) - 28800
+            shift_duration = 28800
+
+            if overtime > 0:
+                print(f"Overtime is {overtime}")
+                self.start_of_shift_2_break = self.env.now + ((4 * 3600) - overtime)
+                shift_duration -= overtime
+
+            self.end_of_shift_2 = self.env.now + shift_duration
             print(f"Second shift starts at {self.env.now}\n")
 
-            self.taken_break_1 = False
-            self.taken_break_2 = False
-            self.start_of_break_1 = self.env.now + 7200
-            self.start_of_break_2 = self.env.now + 19800
-            self.end_of_break_2 = self.env.now + 19830
-            self.end_of_shift_2 = self.env.now + 79200
-
-        elif self.end_of_break_2 <= self.env.now < self.end_of_shift_2 and self.shift_number == 2:
+        elif self.end_of_shift_2 <= self.env.now < self.env.now + 300 and self.shift_number == 2 and not self.day_ended:
             # ending shift 2 and day
             # resetting variables for the next day
-            self.shift_number = 1
-            self.taken_break_1 = False
-            self.taken_break_2 = False
-            self.last_day = self.day
-            self.day += 1  # a new day starts
+            self.day_ended = True
+            overtime = self.env.now - self.end_of_shift_2
 
-            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to shift {self.shift_number}! of day {self.day}\n")
+            print(f"\nSCHÖNES FEIERABEND! at {self.env.now} to day {self.day}\n")
             yield self.env.timeout(28800)
+            self.day += 1  # a new day starts
+            self.shift_number = 1
+            print(f"\nShift {self.shift_number} of day {self.day} starts at {self.env.now}")
             self.start_of_shift_1 = self.env.now
-            self.end_of_shift_1 = self.env.now + 50400
-            self.start_of_break_1 = self.env.now + 7200
-            self.end_of_break_1 = self.env.now + 7215
-            self.start_of_break_2 = self.env.now + 19800
-            self.end_of_break_2 = self.env.now + 19830
-            self.end_of_shift_2 = self.env.now + 79200
+            shift_duration = 28800
 
-            print(f"\nShift {self.shift_number} of day {self.day} starts at {self.start_of_shift_1}")
+            if overtime > 0:
+                print(f"Overtime is {overtime}")
+                shift_duration -= overtime
+
+            self.end_of_shift_1 = self.env.now + shift_duration
+            self.start_of_shift_1_break = self.env.now + 14400
+            self.start_of_shift_2_break = self.env.now + 43200
+            self.end_of_shift_2 = self.env.now + 57600
+            self.taken_shift_1_break = False
+            self.taken_shift_2_break = False
+            self.day_ended = False
 
         else:
             # pass over and continue working since no event is relevant at this time
-            yield self.env.timeout(0)
-
-    def taking_a_break(self, break_time):
-        for machine in factory_machines:
-            with machine.request(priority=0, preempt=False) as request:
-                yield request
-            print(f"Break time started at {self.env.now}, for shift {self.shift_number} of day {self.day}, {machine} duration: {break_time}")
-            yield self.env.timeout(break_time)
-            print(f"Break time ended at {self.env.now}")
-
-    def time_management_2(self):
-        while not self.stop_simulation:
-            if self.env.now == 0:
-                yield self.env.timeout(1)
-
-            elif self.env.now % 7200 == 0 and not self.taken_break_1:
-                yield self.env.process(self.taking_a_break(15))
-                self.taken_break_1 = True
-
-            elif self.env.now % 19800 == 0 and not self.taken_break_2:
-                yield self.env.process(self.taking_a_break(30))
-                self.taken_break_2 = True
-
-            elif self.env.now % 28800 == 0 and not self.shift_1_ended:
-                self.shift_number = 2
-                print(f"SCHÖNES Feierabend to shift {self.shift_number} of day {self.day} at {self.env.now} ")
-                print(f"Shift {self.shift_number} of day {self.day} starting...")
-                yield self.env.timeout(1)
-                self.shift_1_ended = True
-                self.shift_number = 2
-                self.taken_break_1 = False
-                self.taken_break_2 = False
-
-            elif self.env.now % 36000 == 0 and not self.taken_break_1:
-                yield self.env.process(self.taking_a_break(30))
-                self.taken_break_1 = True
-
-            elif self.env.now % 48600 == 0 and not self.taken_break_2:
-                yield self.env.process(self.taking_a_break(15))
-                self.taken_break_2 = True
-
-            elif self.env.now % 57600 == 0:
-                print(f"SCHÖNES Feierabend for day {self.day}")
-                yield self.env.timeout(28800)
-                self.day += 1
-                self.shift_number = 1
-                self.taken_break_1 = False
-                self.taken_break_2 = False
-                self.shift_1_ended = False
-                print(f"Shift {self.shift_number} of day {self.day} starting...")
-
-            else:
-                yield self.env.timeout(1)
+            yield self.env.timeout(1)
 
     # operation
     def operation(self, machine, machine_codename, operating_time):
@@ -937,7 +888,7 @@ class Lernfabrik:
 
                 operating_time = 0
 
-                #yield self.env.process(self.time_management())
+                yield self.env.process(self.time_management())
 
             except simpy.Interrupt:
                 self.currently_broken = True
@@ -998,8 +949,8 @@ class Lernfabrik:
 
         if job.get_machine_required() == machine_gz200 and self.previous_drehen_job is not None:
             print("\n")
-            print(f"Ruestungszeit from {self.previous_drehen_job.get_name()} to {job.get_name()}is {equipping_time} "
-                  f", from {self.env.now} to {self.env.now + equipping_time}")
+            print("Ruestungszeit from ", self.previous_drehen_job.get_name(),
+                  " to ", job.get_name(), " is ", equipping_time)
 
         global RUESTUNGS_ZEIT
         RUESTUNGS_ZEIT += equipping_time  # collect Ruestungszeit for statistical purposes
@@ -1007,7 +958,7 @@ class Lernfabrik:
         if required_machine == machine_gz200:
             self.previous_drehen_job = job  # storing what job came to calculate the Ruestungszeit
 
-        with required_machine.request(priority=2, preempt=True) as request:
+        with required_machine.request(priority=1, preempt=False) as request:
             yield request
 
             print("\nTransport time for ", job.get_name(), "is", transport_time)
@@ -1017,7 +968,7 @@ class Lernfabrik:
             # setting limit
             self.breakdown_limit = ((1 - (get_mz(required_machine))) * 100)
 
-            self.env.process(self.break_machine(required_machine, 3, True))  # starting breakdown function
+            self.env.process(self.break_machine(required_machine, 2, True))  # starting breakdown function
 
             print(f"{job.get_name()} of {amount_to_produce} parts will take {operating_time * amount_to_produce} "
                   f"seconds, started execution at {self.env.now}")
@@ -1283,7 +1234,6 @@ machine_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Drehen
 machine_fz12 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Fräsen
 machine_arbeitsplatz_at_gz200 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
 machine_arbeitsplatz_2 = simpy.PreemptiveResource(env, capacity=1)  # Machine zum Montage
-factory_machines = [machine_jaespa, machine_gz200, machine_fz12, machine_arbeitsplatz_at_gz200, machine_arbeitsplatz_2]
 
 # resource statistics
 MACHINE_JAESPA_ACTIVE_TIME = 0
@@ -1352,7 +1302,6 @@ Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
-SIM_TIME = 86400
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
