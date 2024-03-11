@@ -1,4 +1,4 @@
-class Order:
+class ProductionItem:
     # a tuple that defines an item in production as well as when it was produced
     # this could be an Unilokk or part of an Unilokk
     def __init__(self, amount, production_date):

@@ -8,6 +8,7 @@ from decimal import Decimal
 from Job import Job
 from Order import Order
 from OrderList import OrderList
+from ProductionItem import ProductionItem
 
 # global variables
 MTTR = 60
@@ -48,7 +49,7 @@ REPAIR_TIME = 0
 TRANSPORT_TIME = 0
 
 # unilokk just produced
-UNILOKK_PRODUCED = 0
+UNILOKK_PRODUCED = ProductionItem(0, 0)
 
 # unilokk created
 UNILOKK_COUNT = 0
