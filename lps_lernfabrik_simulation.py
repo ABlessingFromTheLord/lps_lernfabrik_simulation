@@ -105,13 +105,13 @@ def increase_part_count(part_name, output, time):
 def decrease_part_count():
     #  decrease the respective part count after a partis used for order fulfillment
     global OBERTEIL_COUNT
-    OBERTEIL_COUNT.pop()
+    OBERTEIL_COUNT.remove(OBERTEIL_COUNT[0])
     global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT.pop()
+    UNTERTEIL_COUNT.remove(UNTERTEIL_COUNT[0])
     global HALTETEIL_COUNT
-    HALTETEIL_COUNT.pop()
+    HALTETEIL_COUNT.remove(HALTETEIL_COUNT[0])
     global RING_COUNT
-    RING_COUNT.pop()
+    RING_COUNT.remove(RING_COUNT[0])
 
 
 def get_mz(machine):
@@ -706,8 +706,10 @@ def serve_out_and_clear(order, day, time, done_jobs):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
 
-    for i in range(order.get_amount()):
-        UNILOKK_COUNT.pop()
+    index = 0
+    while index < order.get_amount():
+        UNILOKK_COUNT.remove(UNILOKK_COUNT[0])
+        index += 1
 
     global ORDERS_FULFILLED
     ORDERS_FULFILLED += 1
@@ -719,7 +721,7 @@ def serve_out_and_clear(order, day, time, done_jobs):
     done_jobs.clear()
     global ORDER_END_TIME
     ORDER_END_TIME.append(time)
-    print(f"Order fulfilled completely at {time}, in day {day} \n\n")
+    print(f"Order fulfilled completely at {time} in day {day}, leftover Unilokk {len(UNILOKK_COUNT)}\n\n")
 
 
 def get_parts_needed(order):
@@ -759,6 +761,24 @@ def update_statistics(duration, machine):
     elif machine == machine_arbeitsplatz_2:
         global MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
+
+
+def determine_order_processing_start(start_time):
+    # determines when order processing started
+    # if no leftovers were found then it is "start_time", otherwise, it is the
+    # production time of the earliest leftover
+    global UNILOKK_COUNT
+
+    if len(UNILOKK_COUNT) == 0:
+        return start_time
+    else:
+        min_production_time = UNILOKK_COUNT[0]
+
+        for i in range(1, len(UNILOKK_COUNT)):
+            if UNILOKK_COUNT[i].get_production_time() < min_production_time.get_production_time():
+                min_production_time = UNILOKK_COUNT[i]
+
+        return min_production_time.get_production_time()
 
 
 def generate_gantt_chart():
@@ -1156,10 +1176,11 @@ class Lernfabrik:
         global ORDER_INDEX
         if order_number not in ORDER_INDEX:
             ORDER_INDEX.append(order_number)
-            ORDER_START_TIME.append(self.env.now)
+            ORDER_START_TIME.append(determine_order_processing_start(self.env.now))
 
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT[:]
+
         UNILOKK_COUNT.clear()
 
         # need to produce if our order exceeds what is available
@@ -1203,19 +1224,23 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        damaged = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        non_damaged = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged = len(UNILOKK_PRODUCED) - non_damaged
+        print(f"damage ratio {non_damaged} out of {len(UNILOKK_PRODUCED)}: {len(UNILOKK_PRODUCED) - non_damaged}")
 
-        for i in range(len(UNILOKK_PRODUCED) - damaged):
+        for i in range(len(UNILOKK_PRODUCED) - non_damaged):
             UNILOKK_PRODUCED.pop()
 
         UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
         UNILOKK_COUNT.extend(remaining_unilokk)
+        print(f"remaining unilokk {len(remaining_unilokk)}")
+
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {len(UNILOKK_PRODUCED)}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged}, "
+              f"total: {len(UNILOKK_COUNT)}")
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED.clear()
-
-        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {len(UNILOKK_COUNT)}, remaining: "
-              f"{len(remaining_unilokk)}, total: {len(remaining_unilokk) + len(UNILOKK_COUNT)}")
 
         if len(UNILOKK_COUNT) >= order.get_amount():
             # fulfilling order
