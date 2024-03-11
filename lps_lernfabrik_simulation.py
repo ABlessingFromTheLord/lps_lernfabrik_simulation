@@ -1352,7 +1352,7 @@ fig = plt.figure(figsize=(12,8))
 plt.barh(y=df['order number'], left=df["start"],
          width=df["duration"], color=(0, 0.447, 0.741))
 
-plt.xlim(ORDER_START_TIME[0] - 50000, ORDER_END_TIME[len(ORDER_END_TIME) - 1] + 50000)
+plt.xlim(ORDER_START_TIME[0] - 5000, ORDER_END_TIME[len(ORDER_END_TIME) - 1] + 50000)
 plt.ylim(ORDER_INDEX[0] - 1, ORDER_INDEX[len(ORDER_INDEX) - 1] + 1)
 
 
