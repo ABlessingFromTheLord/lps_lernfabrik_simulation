@@ -693,11 +693,11 @@ def serve_out_and_clear(order, day, time, done_jobs):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
 
-    UNILOKK_COUNT -= order.amount
+    UNILOKK_COUNT -= order.get_amount()
     global ORDERS_FULFILLED
     ORDERS_FULFILLED += 1
 
-    if day <= order.delivery_date:
+    if day <= order.get_delivery_date():
         global DEADLINES_MET
         DEADLINES_MET += 1
 
@@ -745,9 +745,8 @@ def update_statistics(duration, machine):
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
 
 
-def print_resource_statistics():
-    # prints out statistics at the end of the simulation to compare how a resource was used
-    # in comparison to the active simulation time
+def print_statistics():
+    # prints out statistics at the end of the simulation
     setup = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
     repair = round((REPAIR_TIME / ACTIVE_SIM_TIME) * 100, 2)
     transport = round((TRANSPORT_TIME / ACTIVE_SIM_TIME) * 100, 2)
@@ -803,7 +802,8 @@ class Lernfabrik:
     def time_management(self):
         # checks the time and day in which we are
 
-        if self.start_of_shift_1_break <= self.env.now < self.end_of_shift_1 and not self.taken_shift_1_break and self.shift_number == 1:
+        if (self.start_of_shift_1_break <= self.env.now < self.end_of_shift_1
+                and not self.taken_shift_1_break and self.shift_number == 1):
             # taking first break of shift
             print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
             self.taken_shift_1_break = True
@@ -812,7 +812,8 @@ class Lernfabrik:
             self.end_of_shift_1_break = self.env.now  # correction if break was not taken on time
             print(f"Break ends at {self.env.now}\n")
 
-        elif self.start_of_shift_2_break <= self.env.now < self.end_of_shift_2 and not self.taken_shift_2_break and self.shift_number == 2:
+        elif (self.start_of_shift_2_break <= self.env.now < self.end_of_shift_2
+              and not self.taken_shift_2_break and self.shift_number == 2):
             # taking first break of shift
             print(f"\nPause at {self.env.now} for shift {self.shift_number} of day {self.day}")
             self.taken_shift_2_break = True
@@ -865,7 +866,7 @@ class Lernfabrik:
 
         else:
             # pass over and continue working since no event is relevant at this time
-            yield self.env.timeout(1)
+            yield self.env.timeout(0)
 
     # operation
     def operation(self, machine, machine_codename, operating_time):
@@ -1022,7 +1023,7 @@ class Lernfabrik:
 
                 # increase Unilokk count for the one that is created
                 global UNILOKK_PRODUCED
-                UNILOKK_PRODUCED = UNILOKK_PRODUCED + 1
+                UNILOKK_PRODUCED += 1
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
@@ -1044,8 +1045,8 @@ class Lernfabrik:
         UNILOKK_COUNT = 0
 
         # need to produce if our order exceeds what is available
-        if order.amount > remaining_unilokk:
-            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
+        if order.get_amount() > remaining_unilokk:
+            working_order = order.get_amount() - remaining_unilokk  # actual order needed to be produced
 
             print("leftover Unilokk ", remaining_unilokk)
 
@@ -1089,10 +1090,10 @@ class Lernfabrik:
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
 
-        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        if UNILOKK_COUNT >= order.amount:
+        if UNILOKK_COUNT >= order.get_amount():
             # fulfilling order
             serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
@@ -1114,8 +1115,8 @@ class Lernfabrik:
             return
 
         # need to produce if our order exceeds what is available
-        if order.amount > remaining_unilokk:
-            working_order = order.amount - remaining_unilokk  # actual order needed to be produced
+        if order.get_amount() > remaining_unilokk:
+            working_order = order.get_amount() - remaining_unilokk  # actual order needed to be produced
 
             print("leftover Unilokk ", remaining_unilokk)
 
@@ -1161,10 +1162,10 @@ class Lernfabrik:
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
 
-        print("\nOrder", order_number, ":", order.amount, " , produced:", UNILOKK_COUNT,
+        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", UNILOKK_COUNT,
               ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
 
-        if UNILOKK_COUNT >= order.amount:
+        if UNILOKK_COUNT >= order.get_amount():
             # fulfilling order
             serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
@@ -1172,7 +1173,7 @@ class Lernfabrik:
             print(f"Order unfulfilled at {self.env.now} in day {self.day} \n")
 
             # redoing order
-            yield self.env.process(self.fulfill_without_optimization(order_number, order))
+            yield self.env.process(self.fulfill_with_optimization(order_number, order))
 
     def benchmark_fulfill_orders(self, orders_list):
         # to be run for the benchmark simulation
@@ -1302,6 +1303,7 @@ Fertigstellung.set_job_before(None)
 Fertigstellung.set_job_after(None)
 Finishing_Jobs = [Fertigstellung]
 
+# instantiating simulating class
 fabric = Lernfabrik(env)
 
 # creating order and add them to order list
@@ -1318,6 +1320,8 @@ order_9 = Order(20, 55)
 order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
+
+# running simulation and printing statistics afterward
 env.process(fabric.fulfill_orders(orders))
 env.run()
-print_resource_statistics()
+print_statistics()
