@@ -1352,14 +1352,14 @@ fig = plt.figure(figsize=(12,8))
 plt.barh(y=df['order number'], left=df["start"],
          width=df["duration"], color=(0, 0.447, 0.741))
 
-plt.xlim(ORDER_START_TIME[0], ORDER_END_TIME[len(ORDER_END_TIME) - 1])
-plt.ylim(ORDER_INDEX[0], ORDER_INDEX[len(ORDER_INDEX) - 1])
+plt.xlim(ORDER_START_TIME[0] - 50000, ORDER_END_TIME[len(ORDER_END_TIME) - 1] + 50000)
+plt.ylim(ORDER_INDEX[0] - 1, ORDER_INDEX[len(ORDER_INDEX) - 1] + 1)
 
-#dt_rng = pd.interval_range(start=ORDER_START_TIME[0], end=ORDER_END_TIME[len(ORDER_END_TIME) - 1])
-plt.xticks(fontsize=15)
-plt.yticks(fontsize=15)
 
-plt.xlabel("Time", fontsize=20, fontweight="bold")
-plt.ylabel("Orders", fontsize=20, fontweight="bold")
-plt.title("Order processing timeline", loc="left", pad=20, fontsize=30, fontweight="bold")
+plt.xticks(fontsize=8)
+plt.yticks(fontsize=8)
+
+plt.xlabel("Time taken to process", fontsize=13, fontweight="bold")
+plt.ylabel("Order ny number", fontsize=13, fontweight="bold")
+plt.title("Order processing timeline", loc="center", pad=21, fontsize=21, fontweight="bold")
 plt.show()
