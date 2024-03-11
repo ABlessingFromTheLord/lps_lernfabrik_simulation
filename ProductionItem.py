@@ -1,11 +1,15 @@
 class ProductionItem:
     # a tuple that defines an item in production as well as when it was produced
     # this could be an Unilokk or part of an Unilokk
-    def __init__(self, amount, production_time):
+    def __init__(self, name, amount, production_time):
+        self.__name = name
         self.__amount = amount
         self.__production_time = production_time
 
     # getters
+    def get_name(self):
+        return self.__name
+
     def get_amount(self):
         return self.__amount
 
@@ -13,6 +17,9 @@ class ProductionItem:
         return self.__production_time
 
     # setters
+    def set_name(self, value):
+        self.__name = value
+
     def set_amount(self, value):
         self.__amount = value
 
