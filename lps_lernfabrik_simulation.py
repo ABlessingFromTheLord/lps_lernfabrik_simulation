@@ -1,6 +1,7 @@
 import math
 import simpy
 import numpy
+import matplotlib.pyplot as plt
 import sqlite3
 from decimal import Decimal
 from Job import Job
@@ -20,10 +21,10 @@ RING = "Ring"
 UNILOKK = [OBERTEIL, UNTERTEIL, HALTETEIL, RING]
 
 # optimization parameters
-OBERTEIL_PRODUCTION = 17
-UNTERTEIL_PRODUCTION = 11
-HALTETEIL_PRODUCTION = 49
-RING_PRODUCTION = 97
+OBERTEIL_UNITS = 17
+UNTERTEIL_UNITS = 11
+HALTETEIL_UNITS = 49
+RING_UNITS = 97
 
 OBERTEIL_ORDER = 0
 UNTERTEIL_ORDER = 0
