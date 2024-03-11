@@ -59,6 +59,11 @@ OPTIMUM_BATCH = [0, 0, 0, 0]
 # simulation time stats
 ACTIVE_SIM_TIME = 0
 
+# Gannt usable stats
+ORDER_INDEX = []  # same as number but used index to avoid shadowing of the same variable later on
+ORDER_START_TIME = []  # timestamp of when an order started being processed
+ORDER_END_TIME = []  # timestamp of when an order finished being processed
+
 
 # global helper functions
 def get_jobs_for_part(part_name):
@@ -220,6 +225,7 @@ def all_jobs_completed_for_part(part_name):
 
 def insert_variable_into_table(table_name, ordered, produced, ruestungszeit):
     # inserts statistics into out a sqlite database
+    # not used in this version but in other branches where set-up time statistics were collected
     sqlite_connection = sqlite3.connect('statistics.db')
     try:
         cursor = sqlite_connection.cursor()
@@ -703,7 +709,8 @@ def serve_out_and_clear(order, day, time, done_jobs):
         DEADLINES_MET += 1
 
     done_jobs.clear()
-
+    global ORDER_END_TIME
+    ORDER_END_TIME.append(time)
     print(f"Order fulfilled completely at {time}, in day {day} \n\n")
 
 
@@ -1038,8 +1045,7 @@ class Lernfabrik:
                 break
 
     def fulfill_without_optimization(self, order_number, order):
-        # fulfillment of orders linearly without any optimization model or parallel
-        # execution of machines
+        # fulfillment of orders linearly without consideration for minimal set-up time
 
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1106,7 +1112,12 @@ class Lernfabrik:
 
     def fulfill_with_optimization(self, order_number, order):
         # fulfillment of orders in such a way that minimal set-up time is achieved
-        # furthermore parallel execution of machines is done wherever possible
+
+        # storing stats for Gannt chart
+        global ORDER_INDEX
+        if order_number not in ORDER_INDEX:
+            ORDER_INDEX.append(order_number)
+            ORDER_START_TIME.append(self.env.now)
 
         global UNILOKK_COUNT
         remaining_unilokk = UNILOKK_COUNT
@@ -1326,3 +1337,7 @@ orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8
 env.process(fabric.fulfill_orders(orders))
 env.run()
 print_statistics()
+
+print(ORDER_INDEX)
+print(ORDER_START_TIME)
+print(ORDER_END_TIME)
