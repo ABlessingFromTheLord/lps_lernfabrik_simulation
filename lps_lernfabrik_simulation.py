@@ -2,6 +2,7 @@ import math
 import simpy
 import numpy
 import matplotlib.pyplot as plt
+import pandas as pd
 import sqlite3
 from decimal import Decimal
 from Job import Job
@@ -1338,6 +1339,27 @@ env.process(fabric.fulfill_orders(orders))
 env.run()
 print_statistics()
 
-print(ORDER_INDEX)
-print(ORDER_START_TIME)
-print(ORDER_END_TIME)
+stats = {'order number': ORDER_INDEX, 'processing_start_time': ORDER_START_TIME, 'processing_end_time': ORDER_END_TIME}
+df = pd.DataFrame(stats)
+df["start"] = df.processing_start_time
+df["end"] = df.processing_end_time
+
+df["duration"] = df["end"] - df["start"]
+print(df)
+
+plt.style.use("ggplot")
+fig = plt.figure(figsize=(12,8))
+plt.barh(y=df['order number'], left=df["start"],
+         width=df["duration"], color=(0, 0.447, 0.741))
+
+plt.xlim(ORDER_START_TIME[0], ORDER_END_TIME[len(ORDER_END_TIME) - 1])
+plt.ylim(ORDER_INDEX[0], ORDER_INDEX[len(ORDER_INDEX) - 1])
+
+#dt_rng = pd.interval_range(start=ORDER_START_TIME[0], end=ORDER_END_TIME[len(ORDER_END_TIME) - 1])
+plt.xticks(fontsize=15)
+plt.yticks(fontsize=15)
+
+plt.xlabel("Time", fontsize=20, fontweight="bold")
+plt.ylabel("Orders", fontsize=20, fontweight="bold")
+plt.title("Order processing timeline", loc="left", pad=20, fontsize=30, fontweight="bold")
+plt.show()
