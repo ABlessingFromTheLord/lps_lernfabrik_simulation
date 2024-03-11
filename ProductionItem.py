@@ -18,3 +18,7 @@ class ProductionItem:
 
     def set_production_date(self, value):
         self.__production_date = value
+
+    def reset(self):
+        self.__amount = 0
+        self.__production_date = 0
