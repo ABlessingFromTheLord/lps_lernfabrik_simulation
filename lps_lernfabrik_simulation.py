@@ -754,6 +754,32 @@ def update_statistics(duration, machine):
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
 
 
+def generate_gantt_chart():
+    # creates a Gannt chart of the production timeline
+    stats = {'order number': ORDER_INDEX, 'processing_start_time': ORDER_START_TIME,
+             'processing_end_time': ORDER_END_TIME}
+    df = pd.DataFrame(stats)
+    df["start"] = df.processing_start_time
+    df["end"] = df.processing_end_time
+
+    df["duration"] = df["end"] - df["start"]
+
+    plt.style.use("ggplot")
+    plt.barh(y=df['order number'], left=df["start"],
+             width=df["duration"], color=(0, 0.447, 0.741))
+
+    plt.xlim(ORDER_START_TIME[0] - 5000, ORDER_END_TIME[len(ORDER_END_TIME) - 1] + 50000)
+    plt.ylim(ORDER_INDEX[0] - 1, ORDER_INDEX[len(ORDER_INDEX) - 1] + 1)
+
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+
+    plt.xlabel("Time taken to process", fontsize=13, fontweight="bold")
+    plt.ylabel("Order ny number", fontsize=13, fontweight="bold")
+    plt.title("Order processing timeline", loc="center", pad=21, fontsize=21, fontweight="bold")
+    plt.show()
+
+
 def print_statistics():
     # prints out statistics at the end of the simulation
     setup = round((RUESTUNGS_ZEIT / ACTIVE_SIM_TIME) * 100, 2)
@@ -1337,29 +1363,5 @@ orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8
 # running simulation and printing statistics afterward
 env.process(fabric.fulfill_orders(orders))
 env.run()
+generate_gantt_chart()
 print_statistics()
-
-stats = {'order number': ORDER_INDEX, 'processing_start_time': ORDER_START_TIME, 'processing_end_time': ORDER_END_TIME}
-df = pd.DataFrame(stats)
-df["start"] = df.processing_start_time
-df["end"] = df.processing_end_time
-
-df["duration"] = df["end"] - df["start"]
-print(df)
-
-plt.style.use("ggplot")
-fig = plt.figure(figsize=(12,8))
-plt.barh(y=df['order number'], left=df["start"],
-         width=df["duration"], color=(0, 0.447, 0.741))
-
-plt.xlim(ORDER_START_TIME[0] - 5000, ORDER_END_TIME[len(ORDER_END_TIME) - 1] + 50000)
-plt.ylim(ORDER_INDEX[0] - 1, ORDER_INDEX[len(ORDER_INDEX) - 1] + 1)
-
-
-plt.xticks(fontsize=8)
-plt.yticks(fontsize=8)
-
-plt.xlabel("Time taken to process", fontsize=13, fontweight="bold")
-plt.ylabel("Order ny number", fontsize=13, fontweight="bold")
-plt.title("Order processing timeline", loc="center", pad=21, fontsize=21, fontweight="bold")
-plt.show()
