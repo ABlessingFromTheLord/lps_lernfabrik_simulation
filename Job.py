@@ -1,60 +1,60 @@
 class Job:
     # definition of how a job made in the simulation looks like
     def __init__(self, name, part_name, duration, machine, machine_codename):
-        self.name = name
-        self.part_name = part_name
-        self.duration = duration
-        self.job_before = Job
-        self.job_after = Job
-        self.machine_required = machine
-        self.machine_codename = machine_codename
-        self.completed = 0
-        self.depth = None
-        self.amount_produced = 0
+        self.__name = name
+        self.__part_name = part_name
+        self.__duration = duration
+        self.__job_before = Job
+        self.__job_after = Job
+        self.__machine_required = machine
+        self.__machine_codename = machine_codename
+        self.__completed = 0
+        self.__depth = None
+        self.__amount_produced = 0
 
     # getters
     def get_name(self):
-        return self.name
+        return self.__name
 
     def get_part_name(self):
-        return self.part_name
+        return self.__part_name
 
     def get_duration(self):
-        return self.duration
+        return self.__duration
 
     def get_job_before(self):
-        return self.job_before
+        return self.__job_before
 
     def get_job_after(self):
-        return self.job_after
+        return self.__job_after
 
     def get_machine_required(self):
-        return self.machine_required
+        return self.__machine_required
 
     def get_machine_codename(self):
-        return self.machine_codename
+        return self.__machine_codename
 
     def get_completed(self):
-        return self.completed
+        return self.__completed
 
     def get_depth(self):
-        return self.depth
+        return self.__depth
 
     def get_amount_produced(self):
-        return self.amount_produced
+        return self.__amount_produced
 
     # setters
     def set_job_before(self, job):
-        self.job_before = job
+        self.__job_before = job
 
     def set_job_after(self, job):
-        self.job_after = job
+        self.__job_after = job
 
     def set_completed(self, value):
-        self.completed = value
+        self.__completed = value
 
     def set_depth(self, value):
-        self.depth = value
+        self.__depth = value
 
     def set_amount_produced(self, value):
-        self.amount_produced = value
+        self.__amount_produced = value

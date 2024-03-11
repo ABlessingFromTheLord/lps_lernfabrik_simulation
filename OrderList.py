@@ -16,13 +16,13 @@ class OrderList:
         new_list = []
 
         for order in self.list:
-            delivery_dates.append(order.delivery_date)
+            delivery_dates.append(order.get_delivery_date())
 
         delivery_dates.sort()
 
         for date in delivery_dates:
             for order in self.list:
-                if order.delivery_date == date:
+                if order.get_delivery_date() == date:
                     new_list.append(order)
                     self.list.remove(order)
         return new_list
