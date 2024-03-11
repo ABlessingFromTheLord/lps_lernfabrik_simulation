@@ -5,8 +5,16 @@ class ProductionItem:
         self.__amount = amount
         self.__production_date = production_date
 
+    # getters
     def get_amount(self):
         return self.__amount
 
     def get_production_date(self):
         return self.__production_date
+
+    # setters
+    def set_amount(self, value):
+        self.__amount = value
+
+    def set_production_date(self, value):
+        self.__production_date = value
