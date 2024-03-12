@@ -1443,7 +1443,7 @@ order_10 = Order(25, 65)
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 
 # running simulation, generating Gantt chart and printing statistics afterward
-env.process(fabric.benchmark_fulfill_orders(orders))
+env.process(fabric.fulfill_orders(orders))
 env.run()
 print_statistics()
 generate_gantt_chart()
