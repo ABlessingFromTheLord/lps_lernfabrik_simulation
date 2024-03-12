@@ -8,6 +8,7 @@ from decimal import Decimal
 from Job import Job
 from Order import Order
 from OrderList import OrderList
+from ProductionItem import ProductionItem
 
 # global variables
 MTTR = 60
@@ -33,10 +34,10 @@ HALTETEIL_ORDER = 0
 RING_ORDER = 0
 
 # parts produced
-OBERTEIL_COUNT = 0
-UNTERTEIL_COUNT = 0
-HALTETEIL_COUNT = 0
-RING_COUNT = 0
+OBERTEIL_COUNT = []
+UNTERTEIL_COUNT = []
+HALTETEIL_COUNT = []
+RING_COUNT = []
 
 # order related stats
 ORDERS_FULFILLED = 0
@@ -48,10 +49,10 @@ REPAIR_TIME = 0
 TRANSPORT_TIME = 0
 
 # unilokk just produced
-UNILOKK_PRODUCED = 0
+UNILOKK_PRODUCED = []
 
 # unilokk created
-UNILOKK_COUNT = 0
+UNILOKK_COUNT = []
 
 # optimum batch
 # index coding: 0 = Oberteil, 1 = Unterteil, 2 = Halteteil, 3 = Ring
@@ -80,33 +81,37 @@ def get_jobs_for_part(part_name):
             return Ring_Jobs
 
 
-def increase_part_count(part_name, output):
+def increase_part_count(part_name, output, time):
     #  increase the respective part count after the machines for part by amount "output"
     match part_name:
         case "Oberteil":
             global OBERTEIL_COUNT
-            OBERTEIL_COUNT += output
+            for i in range(output):
+                OBERTEIL_COUNT.append(ProductionItem("Oberteil", 1, time))
         case "Unterteil":
             global UNTERTEIL_COUNT
-            UNTERTEIL_COUNT += output
+            for i in range(output):
+                UNTERTEIL_COUNT.append(ProductionItem("Unterteil", 1, time))
         case "Halteteil":
             global HALTETEIL_COUNT
-            HALTETEIL_COUNT += output
+            for i in range(output):
+                HALTETEIL_COUNT.append(ProductionItem("Halteteil", 1, time))
         case "Ring":
             global RING_COUNT
-            RING_COUNT += output
+            for i in range(output):
+                RING_COUNT.append(ProductionItem("Ring", 1, time))
 
 
 def decrease_part_count():
     #  decrease the respective part count after a partis used for order fulfillment
     global OBERTEIL_COUNT
-    OBERTEIL_COUNT = OBERTEIL_COUNT - 1
+    OBERTEIL_COUNT.remove(OBERTEIL_COUNT[0])
     global UNTERTEIL_COUNT
-    UNTERTEIL_COUNT = UNTERTEIL_COUNT - 1
+    UNTERTEIL_COUNT.remove(UNTERTEIL_COUNT[0])
     global HALTETEIL_COUNT
-    HALTETEIL_COUNT = HALTETEIL_COUNT - 1
+    HALTETEIL_COUNT.remove(HALTETEIL_COUNT[0])
     global RING_COUNT
-    RING_COUNT = RING_COUNT - 1
+    RING_COUNT.remove(RING_COUNT[0])
 
 
 def get_mz(machine):
@@ -262,13 +267,13 @@ def amount_of_runs(order_list):
     global RING_COUNT
 
     # showing remaining parts from previous execution
-    print("\nOBERTEIL: ", OBERTEIL_COUNT)
-    print("UNTERTEIL: ", UNTERTEIL_COUNT)
-    print("HALTETEIL: ", HALTETEIL_COUNT)
-    print("RING: ", RING_COUNT, "\n")
+    print(f"\nOBERTEIL: {len(OBERTEIL_COUNT)}")
+    print(f"UNTERTEIL: {len(UNTERTEIL_COUNT)}")
+    print(f"HALTETEIL: {len(HALTETEIL_COUNT)}")
+    print(f"RING: {len(RING_COUNT)} \n")
 
     # if we are just starting
-    if OBERTEIL_COUNT == 0 and UNTERTEIL_COUNT == 0 and HALTETEIL_COUNT == 0 and RING_COUNT == 0:
+    if len(OBERTEIL_COUNT) == 0 and len(UNTERTEIL_COUNT) == 0 and len(HALTETEIL_COUNT) == 0 and len(RING_COUNT) == 0:
         for order_instance in range(len(order_list)):
             if order_list[order_instance] == 0:
                 order_list[order_instance] = 0
@@ -286,13 +291,13 @@ def amount_of_runs(order_list):
     # we already produced and have some leftovers
     else:
         # if the leftovers suffice, done produce more
-        if OBERTEIL_COUNT > order_list[0]:
+        if len(OBERTEIL_COUNT) > order_list[0]:
             order_list[0] = 0
-        if UNTERTEIL_COUNT > order_list[1]:
+        if len(UNTERTEIL_COUNT) > order_list[1]:
             order_list[1] = 0
-        if HALTETEIL_COUNT > order_list[2]:
+        if len(HALTETEIL_COUNT) > order_list[2]:
             order_list[2] = 0
-        if RING_COUNT > order_list[3]:
+        if len(RING_COUNT) > order_list[3]:
             order_list[3] = 0
 
         # else produce needed
@@ -301,16 +306,16 @@ def amount_of_runs(order_list):
             if order_list[order_instance] > 0:
                 match order_instance:
                     case 0:
-                        order_list[order_instance] -= OBERTEIL_COUNT
+                        order_list[order_instance] -= len(OBERTEIL_COUNT)
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 17)
                     case 1:
-                        order_list[order_instance] -= UNTERTEIL_COUNT
+                        order_list[order_instance] -= len(UNTERTEIL_COUNT)
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 11)
                     case 2:
-                        order_list[order_instance] -= HALTETEIL_COUNT
+                        order_list[order_instance] -= len(HALTETEIL_COUNT)
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 49)
                     case 3:
-                        order_list[order_instance] -= RING_COUNT
+                        order_list[order_instance] -= len(RING_COUNT)
                         order_list[order_instance] = math.ceil(order_list[order_instance] / 97)
 
     # adding to get the optimal batch
@@ -701,7 +706,11 @@ def serve_out_and_clear(order, day, time, done_jobs):
     # function to do post-processing such as serve orders and clear variables
     global UNILOKK_COUNT
 
-    UNILOKK_COUNT -= order.get_amount()
+    index = 0
+    while index < order.get_amount():
+        UNILOKK_COUNT.remove(UNILOKK_COUNT[0])
+        index += 1
+
     global ORDERS_FULFILLED
     ORDERS_FULFILLED += 1
 
@@ -712,7 +721,7 @@ def serve_out_and_clear(order, day, time, done_jobs):
     done_jobs.clear()
     global ORDER_END_TIME
     ORDER_END_TIME.append(time)
-    print(f"Order fulfilled completely at {time}, in day {day} \n\n")
+    print(f"Order fulfilled completely at {time} in day {day}, leftover Unilokk {len(UNILOKK_COUNT)}\n\n")
 
 
 def get_parts_needed(order):
@@ -752,6 +761,55 @@ def update_statistics(duration, machine):
     elif machine == machine_arbeitsplatz_2:
         global MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
+
+
+def determine_part_with_earlier_time():
+    # checks in the Unilokk parts storage if there are leftovers
+    # if there is, it gives the one produced the earliest
+    left_over = []
+
+    global OBERTEIL_COUNT
+    global UNTERTEIL_COUNT
+    global HALTETEIL_COUNT
+    global RING_COUNT
+
+    if len(OBERTEIL_COUNT) > 0:
+        left_over.extend(OBERTEIL_COUNT)
+    if len(UNTERTEIL_COUNT) > 0:
+        left_over.extend(UNTERTEIL_COUNT)
+    if len(HALTETEIL_COUNT) > 0:
+        left_over.extend(HALTETEIL_COUNT)
+    if len(RING_COUNT) > 0:
+        left_over.extend(RING_COUNT)
+
+    min_time = left_over[0]
+    for i in range(1, len(left_over)):
+        if left_over[i].get_production_time() < min_time.get_production_time():
+            min_time = left_over[i]
+
+    return min_time
+
+
+def determine_order_processing_start(start_time):
+    # determines when order processing started
+    # if no leftovers were found then it is "start_time", otherwise, it is the
+    # production time of the earliest leftover
+    global UNILOKK_COUNT
+
+    if len(UNILOKK_COUNT) == 0:
+        return start_time
+    else:
+        min_production_time_unilokk = UNILOKK_COUNT[0]
+        min_production_time_parts = determine_part_with_earlier_time()
+
+        for i in range(1, len(UNILOKK_COUNT)):
+            if UNILOKK_COUNT[i].get_production_time() < min_production_time_unilokk.get_production_time():
+                min_production_time_unilokk = UNILOKK_COUNT[i]
+
+        if min_production_time_parts.get_production_time() < min_production_time_unilokk.get_production_time():
+            min_production_time_unilokk = min_production_time_parts
+
+        return min_production_time_unilokk.get_production_time()
 
 
 def generate_gantt_chart():
@@ -1025,7 +1083,7 @@ class Lernfabrik:
 
         if all_jobs_completed_for_part(part_name):
             #  all machines required to produce a part have been operated part are created
-            increase_part_count(part_name, amount_to_produce)  # add newly created part
+            increase_part_count(part_name, amount_to_produce, self.env.now)  # add newly created part
             print(math.floor(amount_to_produce), part_name, "(s) was created at ", self.env.now, "\n")
 
         self.done_jobs.append(job)
@@ -1050,15 +1108,16 @@ class Lernfabrik:
         n = 1
         # then assemble them into Unilokk
         while True:
-            if OBERTEIL_COUNT > 0 and UNTERTEIL_COUNT > 0 and HALTETEIL_COUNT > 0 and RING_COUNT > 0:
+            if (len(OBERTEIL_COUNT) > 0 and len(UNTERTEIL_COUNT) > 0 and len(HALTETEIL_COUNT) > 0
+                    and len(RING_COUNT) > 0):
                 yield self.env.process(self.operation(machine_arbeitsplatz_2, "N/A", 180))
+
+                # increase Unilokk produced count for the one that is created
+                global UNILOKK_PRODUCED
+                UNILOKK_PRODUCED.append(ProductionItem("Unilokk", 1, self.env.now))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count()
-
-                # increase Unilokk count for the one that is created
-                global UNILOKK_PRODUCED
-                UNILOKK_PRODUCED += 1
 
                 # simulating transporting the unilokk to the warehouse, 20 seconds are needed
                 yield self.env.timeout(20)
@@ -1073,24 +1132,33 @@ class Lernfabrik:
 
     def fulfill_without_optimization(self, order_number, order):
         # fulfillment of orders linearly without consideration for minimal set-up time
+        if order is None or order.get_amount() <= 0:
+            return
+
+        # storing stats for Gantt chart
+        global ORDER_INDEX
+        if order_number not in ORDER_INDEX:
+            ORDER_INDEX.append(order_number)
+            ORDER_START_TIME.append(determine_order_processing_start(self.env.now))
 
         global UNILOKK_COUNT
-        remaining_unilokk = UNILOKK_COUNT
-        UNILOKK_COUNT = 0
+        remaining_unilokk = UNILOKK_COUNT[:]
+
+        UNILOKK_COUNT.clear()
 
         # need to produce if our order exceeds what is available
-        if order.get_amount() > remaining_unilokk:
-            working_order = order.get_amount() - remaining_unilokk  # actual order needed to be produced
+        if order.get_amount() > len(remaining_unilokk):
+            net_order = order.get_amount() - len(remaining_unilokk)  # actual order needed to be produced
 
-            print("leftover Unilokk ", remaining_unilokk)
+            print(f"leftover Unilokk  {len(remaining_unilokk)}")
 
-            parts_needed = get_parts_needed(working_order)
+            parts_needed = get_parts_needed(net_order)
             print(parts_needed)
 
             batch_size = amount_of_runs(parts_needed)
-            print("batch size", batch_size)
+            print(f"batch size {batch_size}")
             batch_size_in_parts = get_parts_by_batch(batch_size)
-            print("batch size by parts", batch_size_in_parts)
+            print(f"batch size by parts {batch_size_in_parts}")
 
             # further pre-processing from fulfill_without_optimization
             # getting jobs needed
@@ -1117,17 +1185,24 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
+        originally_produced_unilokk = len(UNILOKK_PRODUCED)
+        damage_free_unilokk = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged_unilokk = originally_produced_unilokk - damage_free_unilokk
 
-        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
+        # removing the damaged Unilokk from the batch
+        for i in range(damaged_unilokk):
+            UNILOKK_PRODUCED.pop()
 
-        # reset the unilokk produced counter
-        UNILOKK_PRODUCED = 0
+        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
+        UNILOKK_COUNT.extend(remaining_unilokk)
 
-        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", UNILOKK_COUNT,
-              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
 
-        if UNILOKK_COUNT >= order.get_amount():
+        # reset the Unilokk produced store for the next order
+        UNILOKK_PRODUCED.clear()
+
+        if len(UNILOKK_COUNT) >= order.get_amount():
             # fulfilling order
             serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
@@ -1139,33 +1214,33 @@ class Lernfabrik:
 
     def fulfill_with_optimization(self, order_number, order):
         # fulfillment of orders in such a way that minimal set-up time is achieved
+        if order is None or order.get_amount() <= 0:
+            return
 
         # storing stats for Gannt chart
         global ORDER_INDEX
         if order_number not in ORDER_INDEX:
             ORDER_INDEX.append(order_number)
-            ORDER_START_TIME.append(self.env.now)
+            ORDER_START_TIME.append(determine_order_processing_start(self.env.now))
 
         global UNILOKK_COUNT
-        remaining_unilokk = UNILOKK_COUNT
-        UNILOKK_COUNT = 0
+        remaining_unilokk = UNILOKK_COUNT[:]
 
-        if order is None:
-            return
+        UNILOKK_COUNT.clear()
 
         # need to produce if our order exceeds what is available
-        if order.get_amount() > remaining_unilokk:
-            working_order = order.get_amount() - remaining_unilokk  # actual order needed to be produced
+        if order.get_amount() > len(remaining_unilokk):
+            net_order = order.get_amount() - len(remaining_unilokk)  # actual order needed to be produced
 
-            print("leftover Unilokk ", remaining_unilokk)
+            print(f"leftover Unilokk {len(remaining_unilokk)}")
 
-            parts_needed = get_parts_needed(working_order)
+            parts_needed = get_parts_needed(net_order)
             print(parts_needed)
 
             batch_size = amount_of_runs(parts_needed)
-            print("batch size", batch_size)
+            print(f"batch size {batch_size}")
             batch_size_in_parts = get_parts_by_batch(batch_size)
-            print("batch size by parts", batch_size_in_parts)
+            print(f"batch size by parts {batch_size_in_parts}")
 
             # further pre-processing from fulfill_with_optimization
             # getting order necessities
@@ -1194,19 +1269,24 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        originally_produced = UNILOKK_PRODUCED
-        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
-        damaged = originally_produced - UNILOKK_PRODUCED
+        originally_produced_unilokk = len(UNILOKK_PRODUCED)
+        damage_free_unilokk = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged_unilokk = originally_produced_unilokk - damage_free_unilokk
 
-        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
+        # removing the damaged Unilokk from the batch
+        for i in range(damaged_unilokk):
+            UNILOKK_PRODUCED.pop()
 
-        # reset the unilokk produced counter
-        UNILOKK_PRODUCED = 0
+        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
+        UNILOKK_COUNT.extend(remaining_unilokk)
 
-        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", originally_produced,
-              ", remaining:", remaining_unilokk, "damaged: ", damaged, ", total:", UNILOKK_COUNT)
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
 
-        if UNILOKK_COUNT >= order.get_amount():
+        # reset the Unilokk produced store for the next order
+        UNILOKK_PRODUCED.clear()
+
+        if len(UNILOKK_COUNT) >= order.get_amount():
             # fulfilling order
             serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
@@ -1362,8 +1442,8 @@ order_10 = Order(25, 65)
 
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 
-# running simulation and printing statistics afterward
+# running simulation, generating Gantt chart and printing statistics afterward
 env.process(fabric.fulfill_orders(orders))
 env.run()
-generate_gantt_chart()
 print_statistics()
+generate_gantt_chart()
