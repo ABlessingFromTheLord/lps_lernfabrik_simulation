@@ -1194,15 +1194,17 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
+        originally_produced = UNILOKK_PRODUCED
         UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
+        damaged = originally_produced - UNILOKK_PRODUCED
 
         UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED = 0
 
-        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", UNILOKK_COUNT,
-              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", originally_produced,
+              ", remaining:", remaining_unilokk, "damaged: ", damaged, ", total:", UNILOKK_COUNT)
 
         if UNILOKK_COUNT >= order.get_amount():
             # fulfilling order
