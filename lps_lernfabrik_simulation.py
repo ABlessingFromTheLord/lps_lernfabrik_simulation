@@ -1224,20 +1224,19 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        non_damaged = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
-        damaged = len(UNILOKK_PRODUCED) - non_damaged
-        print(f"damage ratio {non_damaged} out of {len(UNILOKK_PRODUCED)}: {len(UNILOKK_PRODUCED) - non_damaged}")
+        originally_produced = len(UNILOKK_PRODUCED)
+        damage_free = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged = originally_produced - damage_free
 
-        for i in range(len(UNILOKK_PRODUCED) - non_damaged):
+        for i in range(damaged):
             UNILOKK_PRODUCED.pop()
 
         UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
         UNILOKK_COUNT.extend(remaining_unilokk)
         print(f"remaining unilokk {len(remaining_unilokk)}")
 
-        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {len(UNILOKK_PRODUCED)}, remaining: "
-              f"{len(remaining_unilokk)}, damaged: {damaged}, "
-              f"total: {len(UNILOKK_COUNT)}")
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged}, total: {len(UNILOKK_COUNT)}")
 
         # reset the unilokk produced counter
         UNILOKK_PRODUCED.clear()
