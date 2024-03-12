@@ -1135,23 +1135,30 @@ class Lernfabrik:
         if order is None or order.get_amount() <= 0:
             return
 
+        # storing stats for Gantt chart
+        global ORDER_INDEX
+        if order_number not in ORDER_INDEX:
+            ORDER_INDEX.append(order_number)
+            ORDER_START_TIME.append(determine_order_processing_start(self.env.now))
+
         global UNILOKK_COUNT
-        remaining_unilokk = UNILOKK_COUNT
-        UNILOKK_COUNT = 0
+        remaining_unilokk = UNILOKK_COUNT[:]
+
+        UNILOKK_COUNT.clear()
 
         # need to produce if our order exceeds what is available
-        if order.get_amount() > remaining_unilokk:
-            working_order = order.get_amount() - remaining_unilokk  # actual order needed to be produced
+        if order.get_amount() > len(remaining_unilokk):
+            net_order = order.get_amount() - len(remaining_unilokk)  # actual order needed to be produced
 
-            print("leftover Unilokk ", remaining_unilokk)
+            print(f"leftover Unilokk  {len(remaining_unilokk)}")
 
-            parts_needed = get_parts_needed(working_order)
+            parts_needed = get_parts_needed(net_order)
             print(parts_needed)
 
             batch_size = amount_of_runs(parts_needed)
-            print("batch size", batch_size)
+            print(f"batch size {batch_size}")
             batch_size_in_parts = get_parts_by_batch(batch_size)
-            print("batch size by parts", batch_size_in_parts)
+            print(f"batch size by parts {batch_size_in_parts}")
 
             # further pre-processing from fulfill_without_optimization
             # getting jobs needed
@@ -1178,17 +1185,24 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        UNILOKK_PRODUCED = math.floor(UNILOKK_PRODUCED * get_quality_grade(machine_arbeitsplatz_2))
+        originally_produced_unilokk = len(UNILOKK_PRODUCED)
+        damage_free_unilokk = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged_unilokk = originally_produced_unilokk - damage_free_unilokk
 
-        UNILOKK_COUNT += (UNILOKK_PRODUCED + remaining_unilokk)
+        # removing the damaged Unilokk from the batch
+        for i in range(damaged_unilokk):
+            UNILOKK_PRODUCED.pop()
 
-        # reset the unilokk produced counter
-        UNILOKK_PRODUCED = 0
+        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
+        UNILOKK_COUNT.extend(remaining_unilokk)
 
-        print("\nOrder", order_number, ":", order.get_amount(), " , produced:", UNILOKK_COUNT,
-              ", remaining:", remaining_unilokk, ", total:", remaining_unilokk + UNILOKK_COUNT)
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
 
-        if UNILOKK_COUNT >= order.get_amount():
+        # reset the Unilokk produced store for the next order
+        UNILOKK_PRODUCED.clear()
+
+        if len(UNILOKK_COUNT) >= order.get_amount():
             # fulfilling order
             serve_out_and_clear(order, self.day, self.env.now, self.done_jobs)
         else:
@@ -1216,11 +1230,11 @@ class Lernfabrik:
 
         # need to produce if our order exceeds what is available
         if order.get_amount() > len(remaining_unilokk):
-            working_order = order.get_amount() - len(remaining_unilokk)  # actual order needed to be produced
+            net_order = order.get_amount() - len(remaining_unilokk)  # actual order needed to be produced
 
             print(f"leftover Unilokk {len(remaining_unilokk)}")
 
-            parts_needed = get_parts_needed(working_order)
+            parts_needed = get_parts_needed(net_order)
             print(parts_needed)
 
             batch_size = amount_of_runs(parts_needed)
@@ -1255,21 +1269,21 @@ class Lernfabrik:
 
         # increase based on what is produced minus damaged
         global UNILOKK_PRODUCED
-        originally_produced = len(UNILOKK_PRODUCED)
-        damage_free = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
-        damaged = originally_produced - damage_free
+        originally_produced_unilokk = len(UNILOKK_PRODUCED)
+        damage_free_unilokk = math.floor(len(UNILOKK_PRODUCED) * get_quality_grade(machine_arbeitsplatz_2))
+        damaged_unilokk = originally_produced_unilokk - damage_free_unilokk
 
-        for i in range(damaged):
+        # removing the damaged Unilokk from the batch
+        for i in range(damaged_unilokk):
             UNILOKK_PRODUCED.pop()
 
         UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
         UNILOKK_COUNT.extend(remaining_unilokk)
-        print(f"remaining unilokk {len(remaining_unilokk)}")
 
-        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced}, remaining: "
-              f"{len(remaining_unilokk)}, damaged: {damaged}, total: {len(UNILOKK_COUNT)}")
+        print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
+              f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
 
-        # reset the unilokk produced counter
+        # reset the Unilokk produced store for the next order
         UNILOKK_PRODUCED.clear()
 
         if len(UNILOKK_COUNT) >= order.get_amount():
@@ -1429,7 +1443,7 @@ order_10 = Order(25, 65)
 orders = [order_1, order_2, order_3, order_4, order_5, order_6, order_7, order_8, order_9, order_10]
 
 # running simulation, generating Gantt chart and printing statistics afterward
-env.process(fabric.fulfill_orders(orders))
+env.process(fabric.benchmark_fulfill_orders(orders))
 env.run()
 print_statistics()
 generate_gantt_chart()
