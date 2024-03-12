@@ -835,7 +835,7 @@ def generate_gantt_chart():
     plt.xlabel("Time taken to process", fontsize=13, fontweight="bold")
     plt.ylabel("Order ny number", fontsize=13, fontweight="bold")
     plt.title("Order processing timeline", loc="center", pad=21, fontsize=21, fontweight="bold")
-    plt.show()
+    plt.savefig('GanntDiagram.png')
 
 
 def print_statistics():
