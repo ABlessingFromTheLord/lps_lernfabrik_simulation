@@ -763,6 +763,33 @@ def update_statistics(duration, machine):
         MACHINE_ARBEITSPLATZ_2_ACTIVE_TIME += duration
 
 
+def determine_part_with_earlier_time():
+    # checks in the Unilokk parts storage if there are leftovers
+    # if there is, it gives the one produced the earliest
+    left_over = []
+
+    global OBERTEIL_COUNT
+    global UNTERTEIL_COUNT
+    global HALTETEIL_COUNT
+    global RING_COUNT
+
+    if len(OBERTEIL_COUNT) > 0:
+        left_over.extend(OBERTEIL_COUNT)
+    if len(UNTERTEIL_COUNT) > 0:
+        left_over.extend(UNTERTEIL_COUNT)
+    if len(HALTETEIL_COUNT) > 0:
+        left_over.extend(HALTETEIL_COUNT)
+    if len(RING_COUNT) > 0:
+        left_over.extend(RING_COUNT)
+
+    min_time = left_over[0]
+    for i in range(1, len(left_over)):
+        if left_over[i].get_production_time() < min_time.get_production_time():
+            min_time = left_over[i]
+
+    return min_time
+
+
 def determine_order_processing_start(start_time):
     # determines when order processing started
     # if no leftovers were found then it is "start_time", otherwise, it is the
@@ -772,13 +799,17 @@ def determine_order_processing_start(start_time):
     if len(UNILOKK_COUNT) == 0:
         return start_time
     else:
-        min_production_time = UNILOKK_COUNT[0]
+        min_production_time_unilokk = UNILOKK_COUNT[0]
+        min_production_time_parts = determine_part_with_earlier_time()
 
         for i in range(1, len(UNILOKK_COUNT)):
-            if UNILOKK_COUNT[i].get_production_time() < min_production_time.get_production_time():
-                min_production_time = UNILOKK_COUNT[i]
+            if UNILOKK_COUNT[i].get_production_time() < min_production_time_unilokk.get_production_time():
+                min_production_time_unilokk = UNILOKK_COUNT[i]
 
-        return min_production_time.get_production_time()
+        if min_production_time_parts.get_production_time() < min_production_time_unilokk.get_production_time():
+            min_production_time_unilokk = min_production_time_parts
+
+        return min_production_time_unilokk.get_production_time()
 
 
 def generate_gantt_chart():
