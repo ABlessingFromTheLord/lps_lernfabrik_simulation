@@ -87,19 +87,19 @@ def increase_part_count(part_name, output, time):
         case "Oberteil":
             global OBERTEIL_COUNT
             for i in range(output):
-                OBERTEIL_COUNT.append(ProductionItem("Oberteil", 1, time))
+                OBERTEIL_COUNT.append(ProductionItem("Oberteil", time))
         case "Unterteil":
             global UNTERTEIL_COUNT
             for i in range(output):
-                UNTERTEIL_COUNT.append(ProductionItem("Unterteil", 1, time))
+                UNTERTEIL_COUNT.append(ProductionItem("Unterteil", time))
         case "Halteteil":
             global HALTETEIL_COUNT
             for i in range(output):
-                HALTETEIL_COUNT.append(ProductionItem("Halteteil", 1, time))
+                HALTETEIL_COUNT.append(ProductionItem("Halteteil", time))
         case "Ring":
             global RING_COUNT
             for i in range(output):
-                RING_COUNT.append(ProductionItem("Ring", 1, time))
+                RING_COUNT.append(ProductionItem("Ring", time))
 
 
 def decrease_part_count():
@@ -1114,7 +1114,7 @@ class Lernfabrik:
 
                 # increase Unilokk produced count for the one that is created
                 global UNILOKK_PRODUCED
-                UNILOKK_PRODUCED.append(ProductionItem("Unilokk", 1, self.env.now))
+                UNILOKK_PRODUCED.append(ProductionItem("Unilokk", self.env.now))
 
                 # decrement for the parts used above to create a whole Unilokk
                 decrease_part_count()
