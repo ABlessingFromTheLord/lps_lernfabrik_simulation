@@ -1089,13 +1089,13 @@ class Lernfabrik:
         self.done_jobs.append(job)
 
     def series_job_execution(self, jobs_in_series):
-        # called n times to execute the rest of the jobs that cannot be parallelized,
-        # its execution is in series
+        # Called n times, where n = len(jobs_in_series) to execute jobs one after another.
+        # It is only for conceptual purposes. Not actually applied in the simulation.
         for job in jobs_in_series:
             yield self.env.process(self.do_job(job))
 
     def parallel_job_execution(self, jobs_in_parallel):
-        # called n times as our parallelized_jobs array to execute jobs in parallel
+        # Called n times, where n = len(jobs_in_series) to execute jobs simultaneously.
         for job in jobs_in_parallel:
             self.env.process(self.do_job(job))
             yield self.env.timeout(0)
@@ -1164,7 +1164,6 @@ class Lernfabrik:
             # getting jobs needed
             jobs = get_jobs_from_batch(batch_size_in_parts)
             amount_of_jobs_to_be_done = len(jobs)
-
             jobs_sorted_by_machine = sort_jobs_by_machines(jobs)
 
             while len(self.done_jobs) < amount_of_jobs_to_be_done:
@@ -1297,8 +1296,8 @@ class Lernfabrik:
             yield self.env.process(self.fulfill_with_optimization(order_number, order))
 
     def benchmark_fulfill_orders(self, orders_list):
-        # to be run for the benchmark simulation
-        # the whole process from part creation to order fulfillment
+        # The whole process from part creation to order fulfillment
+        # To be run for the benchmark simulation
 
         # store starting time
         start = self.env.now
@@ -1320,8 +1319,8 @@ class Lernfabrik:
         print("\nDeadlines met:", DEADLINES_MET, "/", len(orders_list))
 
     def fulfill_orders(self, orders_list):
-        # to be run for the simulation with the optimization
-        # the whole process from part creation to order fulfillment
+        # The whole process from part creation to order fulfillment
+        # To be run by the optimized implementation
 
         # receiving and prioritizing orders
         self.orders.receive_order(orders_list)
