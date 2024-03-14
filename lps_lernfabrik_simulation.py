@@ -656,17 +656,17 @@ def arrange_jobs_by_min_setup_time(previous_drehen, job_list):
 def get_parallel_runnable_jobs(jobs_list):
     # returns jobs that can be run in parallel as a list
     # "ran in parallel means" at the same time
-    to_return = []
+    output_list = []
 
     for jobs_sublist in jobs_list:
         if len(jobs_sublist) > 0:
             machine_needed = jobs_sublist[0].get_machine_required()
 
             if machine_is_free(machine_needed) and is_runnable(jobs_sublist[0]):
-                to_return.append(jobs_sublist[0])
+                output_list.append(jobs_sublist[0])
                 jobs_sublist.remove(jobs_sublist[0])
 
-    return to_return
+    return output_list
 
 
 def get_depth(job_list):
