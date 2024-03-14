@@ -1192,8 +1192,8 @@ class Lernfabrik:
         for i in range(damaged_unilokk):
             UNILOKK_PRODUCED.pop()
 
-        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
         UNILOKK_COUNT.extend(remaining_unilokk)
+        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
 
         print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
               f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
@@ -1276,8 +1276,8 @@ class Lernfabrik:
         for i in range(damaged_unilokk):
             UNILOKK_PRODUCED.pop()
 
-        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
         UNILOKK_COUNT.extend(remaining_unilokk)
+        UNILOKK_COUNT.extend(UNILOKK_PRODUCED)
 
         print(f"\nOrder {order_number}: {order.get_amount()}, produced: {originally_produced_unilokk}, remaining: "
               f"{len(remaining_unilokk)}, damaged: {damaged_unilokk}, total: {len(UNILOKK_COUNT)}")
